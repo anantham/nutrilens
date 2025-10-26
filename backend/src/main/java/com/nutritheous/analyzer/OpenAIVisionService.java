@@ -50,11 +50,21 @@ public class OpenAIVisionService {
      *
      * @param imageDataUri Base64 encoded image with data URI prefix (e.g., "data:image/jpeg;base64,...")
      * @param userDescription Optional user-provided description to help with analysis
+     * @param locationContext Optional location context from GPS + Google Maps
+     * @param mealTime Optional meal time for time-based context
      * @return AnalysisResponse with nutritional information
      * @throws AnalyzerException If analysis fails
      */
-    public AnalysisResponse analyzeImage(String imageDataUri, String userDescription) throws AnalyzerException {
-        log.info("Starting OpenAI Vision analysis with user description: {}", userDescription);
+    public AnalysisResponse analyzeImage(
+            String imageDataUri,
+            String userDescription,
+            com.nutritheous.common.dto.LocationContext locationContext,
+            java.time.LocalDateTime mealTime
+    ) throws AnalyzerException {
+        log.info("Starting OpenAI Vision analysis with user description: {}, location: {}, time: {}",
+                userDescription,
+                locationContext != null ? locationContext.getPlaceName() : "unknown",
+                mealTime);
 
         try {
             // Build the request payload with multi-content format
@@ -65,7 +75,7 @@ public class OpenAIVisionService {
 
             Map<String, Object> textContent = Map.of(
                 "type", "text",
-                "text", getAnalysisPrompt(userDescription)
+                "text", getAnalysisPrompt(userDescription, locationContext, mealTime)
             );
 
             Map<String, Object> message = Map.of(
@@ -274,17 +284,26 @@ public class OpenAIVisionService {
      * Analyzes a text description only (no image) and returns nutritional information.
      *
      * @param description User-provided description of the meal
+     * @param locationContext Optional location context from GPS + Google Maps
+     * @param mealTime Optional meal time for time-based context
      * @return AnalysisResponse with nutritional information
      * @throws AnalyzerException If analysis fails
      */
-    public AnalysisResponse analyzeTextOnly(String description) throws AnalyzerException {
-        log.info("Starting OpenAI text-only analysis for: {}", description);
+    public AnalysisResponse analyzeTextOnly(
+            String description,
+            com.nutritheous.common.dto.LocationContext locationContext,
+            java.time.LocalDateTime mealTime
+    ) throws AnalyzerException {
+        log.info("Starting OpenAI text-only analysis for: {}, location: {}, time: {}",
+                description,
+                locationContext != null ? locationContext.getPlaceName() : "unknown",
+                mealTime);
 
         try {
             // Build the request payload with text-only format
             Map<String, Object> message = Map.of(
                 "role", "user",
-                "content", getTextOnlyPrompt(description)
+                "content", getTextOnlyPrompt(description, locationContext, mealTime)
             );
 
             Map<String, Object> requestBody = Map.of(
@@ -343,9 +362,13 @@ public class OpenAIVisionService {
 
     /**
      * Returns the AI prompt for nutritional analysis.
-     * Incorporates user-provided description if available.
+     * Incorporates user description, location context, and time context if available.
      */
-    private String getAnalysisPrompt(String userDescription) {
+    private String getAnalysisPrompt(
+            String userDescription,
+            com.nutritheous.common.dto.LocationContext locationContext,
+            java.time.LocalDateTime mealTime
+    ) {
         String userContext = "";
         if (userDescription != null && !userDescription.isBlank()) {
             userContext = "\n\nUSER'S DESCRIPTION: \"" + userDescription + "\"\n" +
@@ -354,9 +377,12 @@ public class OpenAIVisionService {
                          "ingredients, or portions that may not be visible in the image.\n";
         }
 
+        String locationHint = buildLocationContext(locationContext);
+        String timeContext = buildTimeContext(mealTime);
+
         return """
                 You are a nutrition analysis expert. Analyze the food in this image and provide detailed nutritional information.
-                """ + userContext + """
+                """ + userContext + locationHint + timeContext + """
 
                 CRITICAL: Return ONLY a valid JSON object. No markdown, no code blocks, no explanation - just pure JSON.
 
@@ -426,12 +452,21 @@ public class OpenAIVisionService {
 
     /**
      * Returns the AI prompt for text-only nutritional analysis.
+     * Incorporates location context and time context if available.
      */
-    private String getTextOnlyPrompt(String description) {
+    private String getTextOnlyPrompt(
+            String description,
+            com.nutritheous.common.dto.LocationContext locationContext,
+            java.time.LocalDateTime mealTime
+    ) {
+        String locationHint = buildLocationContext(locationContext);
+        String timeContext = buildTimeContext(mealTime);
+
         return """
                 You are a nutrition analysis expert. Based on the text description provided by the user, estimate the nutritional information for the meal.
 
                 USER'S MEAL DESCRIPTION: "%s"
+                """ + locationHint + timeContext + """
 
                 Analyze this description and provide your best estimate of the nutritional content. Consider typical portion sizes and preparation methods.
 
@@ -492,5 +527,102 @@ public class OpenAIVisionService {
                 Remember: Return ONLY the JSON object, nothing else.
                 Provide reasonable estimates based on typical nutritional values for similar foods.
                 """.formatted(description);
+    }
+
+    /**
+     * Build location context hint for AI prompt.
+     */
+    private String buildLocationContext(com.nutritheous.common.dto.LocationContext loc) {
+        if (loc == null || !loc.isKnown()) {
+            return "";
+        }
+
+        StringBuilder context = new StringBuilder("\n\nLOCATION CONTEXT:\n");
+
+        if (loc.isRestaurant()) {
+            context.append(String.format("- Photo taken at: %s (%s)\n",
+                    loc.getPlaceName(), loc.getPlaceType()));
+
+            if (loc.getCuisineType() != null) {
+                context.append(String.format("- Cuisine type: %s\n", loc.getCuisineType()));
+            }
+
+            if (loc.getPriceLevel() != null) {
+                String priceIndicator = "$".repeat(loc.getPriceLevel());
+                context.append(String.format("- Price level: %s\n", priceIndicator));
+                context.append("- Adjust portion sizes and preparation for restaurant context\n");
+                context.append("- Restaurant meals often have higher sodium and fat\n");
+                context.append("- Consider typical restaurant serving sizes (often larger than home portions)\n");
+            }
+        } else if (loc.isHome()) {
+            context.append("- Photo taken at home (likely home-cooked)\n");
+            context.append("- Home-cooked meals typically less processed\n");
+            context.append("- Consider typical home portion sizes\n");
+        } else if (loc.getPlaceType().equals("cafe")) {
+            context.append(String.format("- Photo taken at: %s (cafe)\n", loc.getPlaceName()));
+            context.append("- Consider typical cafe portions and preparations\n");
+        } else if (loc.getPlaceType().equals("gym")) {
+            context.append("- Photo taken at gym (likely pre/post-workout meal)\n");
+            context.append("- May indicate performance-focused nutrition\n");
+        } else if (loc.getPlaceType().equals("grocery_store") || loc.getPlaceType().equals("convenience_store")) {
+            context.append("- Photo taken at store (likely packaged food)\n");
+            context.append("- Consider higher processing levels for store-bought items\n");
+        }
+
+        return context.toString();
+    }
+
+    /**
+     * Build time context hint for AI prompt.
+     */
+    private String buildTimeContext(java.time.LocalDateTime mealTime) {
+        if (mealTime == null) {
+            return "";
+        }
+
+        int hour = mealTime.getHour();
+        String timeOfDay;
+        String typicalMeal;
+        String portionGuidance;
+
+        if (hour >= 5 && hour < 10) {
+            timeOfDay = "early morning";
+            typicalMeal = "breakfast";
+            portionGuidance = "Consider typical breakfast portion sizes (often smaller than lunch/dinner)";
+        } else if (hour >= 10 && hour < 12) {
+            timeOfDay = "late morning";
+            typicalMeal = "brunch";
+            portionGuidance = "Consider brunch portion sizes (often larger than breakfast)";
+        } else if (hour >= 12 && hour < 15) {
+            timeOfDay = "midday";
+            typicalMeal = "lunch";
+            portionGuidance = "Consider typical lunch portion sizes";
+        } else if (hour >= 15 && hour < 17) {
+            timeOfDay = "afternoon";
+            typicalMeal = "snack";
+            portionGuidance = "Consider smaller snack-sized portions";
+        } else if (hour >= 17 && hour < 21) {
+            timeOfDay = "evening";
+            typicalMeal = "dinner";
+            portionGuidance = "Consider typical dinner portion sizes (often largest meal)";
+        } else {
+            timeOfDay = "late night";
+            typicalMeal = "late snack";
+            portionGuidance = "Consider smaller late-night snack portions";
+        }
+
+        return String.format("""
+
+                TIME CONTEXT:
+                - Photo taken at: %s (%s)
+                - Typical meal for this time: %s
+                - %s
+                - Adjust portion estimates for time of day
+                """,
+                mealTime.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a")),
+                timeOfDay,
+                typicalMeal,
+                portionGuidance
+        );
     }
 }

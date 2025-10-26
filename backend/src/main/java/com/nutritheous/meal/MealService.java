@@ -133,16 +133,24 @@ public class MealService {
         meal = mealRepository.save(meal);
         logger.info("Created meal with id: {}", meal.getId());
 
-        // Analyze the meal (with or without image)
+        // STEP 6: Analyze the meal with AI (now with location and time context!)
         UUID mealId = meal.getId();
         try {
             if (hasImage) {
-                logger.info("Sending image to AI analyzer with user description: {}", description);
-                AnalysisResponse analysisResponse = analyzerService.analyzeImage(tempAnalyzerUrl, description);
+                logger.info("Sending image to AI analyzer with context - description: {}, location: {}, time: {}",
+                        description,
+                        locationContext != null ? locationContext.getPlaceName() : "none",
+                        effectiveMealTime);
+                AnalysisResponse analysisResponse = analyzerService.analyzeImage(
+                        tempAnalyzerUrl, description, locationContext, effectiveMealTime);
                 updateMealWithAnalysis(meal, analysisResponse);
             } else if (description != null && !description.isBlank()) {
-                logger.info("Analyzing text-only meal description: {}", description);
-                AnalysisResponse analysisResponse = analyzerService.analyzeTextOnly(description);
+                logger.info("Analyzing text-only meal with context - description: {}, location: {}, time: {}",
+                        description,
+                        locationContext != null ? locationContext.getPlaceName() : "none",
+                        effectiveMealTime);
+                AnalysisResponse analysisResponse = analyzerService.analyzeTextOnly(
+                        description, locationContext, effectiveMealTime);
                 updateMealWithAnalysis(meal, analysisResponse);
             } else {
                 // This shouldn't happen due to validation in controller, but handle it
