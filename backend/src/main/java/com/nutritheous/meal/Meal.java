@@ -131,6 +131,46 @@ public class Meal {
     @Column(name = "meal_type_guess", length = 20)
     private String mealTypeGuess;
 
+    // Photo metadata (EXIF data)
+    @Column(name = "photo_captured_at")
+    private LocalDateTime photoCapturedAt;
+
+    @Column(name = "photo_latitude")
+    private Double photoLatitude;
+
+    @Column(name = "photo_longitude")
+    private Double photoLongitude;
+
+    @Column(name = "photo_device_make", length = 100)
+    private String photoDeviceMake;
+
+    @Column(name = "photo_device_model", length = 100)
+    private String photoDeviceModel;
+
+    // Location context (from Google Maps API)
+    @Column(name = "location_place_name", length = 255)
+    private String locationPlaceName;
+
+    @Column(name = "location_place_type", length = 50)
+    private String locationPlaceType;
+
+    @Column(name = "location_cuisine_type", length = 50)
+    private String locationCuisineType;
+
+    @Column(name = "location_price_level")
+    private Integer locationPriceLevel;
+
+    @Column(name = "location_is_restaurant")
+    @Builder.Default
+    private Boolean locationIsRestaurant = false;
+
+    @Column(name = "location_is_home")
+    @Builder.Default
+    private Boolean locationIsHome = false;
+
+    @Column(name = "location_address", length = 500)
+    private String locationAddress;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "analysis_status", length = 20)
     @Builder.Default

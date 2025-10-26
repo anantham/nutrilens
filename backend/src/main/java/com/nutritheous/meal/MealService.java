@@ -38,6 +38,12 @@ public class MealService {
     @Autowired
     private AnalyzerService analyzerService;
 
+    @Autowired
+    private com.nutritheous.service.PhotoMetadataService photoMetadataService;
+
+    @Autowired
+    private com.nutritheous.service.LocationContextService locationContextService;
+
     @Transactional
     public MealResponse uploadMeal(
             UUID userId,
@@ -54,7 +60,25 @@ public class MealService {
         String tempAnalyzerUrl = null;
         boolean hasImage = image != null && !image.isEmpty();
 
-        // Upload image to storage if provided
+        // STEP 1: Extract photo metadata (EXIF GPS, timestamp, device info)
+        com.nutritheous.common.dto.PhotoMetadata photoMetadata = null;
+        if (hasImage) {
+            logger.info("Extracting metadata from photo for user: {}", userId);
+            photoMetadata = photoMetadataService.extractMetadata(image);
+        }
+
+        // STEP 2: Get location context from GPS coordinates via Google Maps
+        com.nutritheous.common.dto.LocationContext locationContext = null;
+        if (photoMetadata != null && photoMetadata.hasGPS()) {
+            logger.info("Getting location context from GPS: ({}, {})",
+                    photoMetadata.getLatitude(), photoMetadata.getLongitude());
+            locationContext = locationContextService.getLocationContext(
+                    photoMetadata.getLatitude(),
+                    photoMetadata.getLongitude()
+            );
+        }
+
+        // STEP 3: Upload image to storage if provided
         if (hasImage) {
             logger.info("Uploading image to storage for user: {}", userId);
             objectName = storageService.uploadFile(image, userId);
@@ -64,15 +88,47 @@ public class MealService {
             logger.info("No image provided, creating text-only meal entry");
         }
 
-        // Create meal entity with pending status
-        Meal meal = Meal.builder()
+        // STEP 4: Determine effective meal time (use photo timestamp if available)
+        LocalDateTime effectiveMealTime = mealTime;
+        if (effectiveMealTime == null && photoMetadata != null && photoMetadata.getCapturedAt() != null) {
+            effectiveMealTime = photoMetadata.getCapturedAt();
+            logger.info("Using photo capture time as meal time: {}", effectiveMealTime);
+        } else if (effectiveMealTime == null) {
+            effectiveMealTime = LocalDateTime.now();
+        }
+
+        // STEP 5: Create meal entity with metadata and location context
+        Meal.MealBuilder mealBuilder = Meal.builder()
                 .user(user)
-                .mealTime(mealTime != null ? mealTime : LocalDateTime.now())
+                .mealTime(effectiveMealTime)
                 .mealType(mealType)
                 .objectName(objectName)
                 .description(description)
-                .analysisStatus(Meal.AnalysisStatus.PENDING)
-                .build();
+                .analysisStatus(Meal.AnalysisStatus.PENDING);
+
+        // Add photo metadata if available
+        if (photoMetadata != null) {
+            mealBuilder
+                    .photoCapturedAt(photoMetadata.getCapturedAt())
+                    .photoLatitude(photoMetadata.getLatitude())
+                    .photoLongitude(photoMetadata.getLongitude())
+                    .photoDeviceMake(photoMetadata.getDeviceMake())
+                    .photoDeviceModel(photoMetadata.getDeviceModel());
+        }
+
+        // Add location context if available
+        if (locationContext != null && locationContext.isKnown()) {
+            mealBuilder
+                    .locationPlaceName(locationContext.getPlaceName())
+                    .locationPlaceType(locationContext.getPlaceType())
+                    .locationCuisineType(locationContext.getCuisineType())
+                    .locationPriceLevel(locationContext.getPriceLevel())
+                    .locationIsRestaurant(locationContext.isRestaurant())
+                    .locationIsHome(locationContext.isHome())
+                    .locationAddress(locationContext.getAddress());
+        }
+
+        Meal meal = mealBuilder.build();
 
         meal = mealRepository.save(meal);
         logger.info("Created meal with id: {}", meal.getId());
