@@ -160,6 +160,20 @@ public class OpenAIVisionService {
                     .allergens(getStringList(jsonNode, "allergens"))
                     .healthNotes(getStringValue(jsonNode, "health_notes"))
                     .confidence(getDoubleValue(jsonNode, "confidence"))
+                    // Enhanced AI-extracted fields
+                    .cookingMethod(getStringValue(jsonNode, "cooking_method"))
+                    .novaScore(getDoubleValue(jsonNode, "nova_score"))
+                    .isUltraProcessed(getBooleanValue(jsonNode, "is_ultra_processed"))
+                    .isFried(getBooleanValue(jsonNode, "is_fried"))
+                    .hasRefinedGrains(getBooleanValue(jsonNode, "has_refined_grains"))
+                    .estimatedGi(getIntValue(jsonNode, "estimated_gi"))
+                    .estimatedGl(getIntValue(jsonNode, "estimated_gl"))
+                    .plantCount(getIntValue(jsonNode, "plant_count"))
+                    .uniquePlants(getStringList(jsonNode, "unique_plants"))
+                    .isFermented(getBooleanValue(jsonNode, "is_fermented"))
+                    .proteinSourceType(getStringValue(jsonNode, "protein_source_type"))
+                    .fatQuality(getStringValue(jsonNode, "fat_quality"))
+                    .mealTypeGuess(getStringValue(jsonNode, "meal_type_guess"))
                     .build();
 
             log.info("Successfully parsed nutrition response");
@@ -223,6 +237,22 @@ public class OpenAIVisionService {
         }
 
         return fieldNode.asDouble();
+    }
+
+    /**
+     * Helper method to safely extract boolean values from JSON.
+     */
+    private Boolean getBooleanValue(JsonNode node, String fieldName) {
+        if (!node.has(fieldName)) {
+            return null;
+        }
+
+        JsonNode fieldNode = node.get(fieldName);
+        if (fieldNode.isNull()) {
+            return null;
+        }
+
+        return fieldNode.asBoolean();
     }
 
     /**
@@ -345,17 +375,46 @@ public class OpenAIVisionService {
                   "ingredients": ["main ingredient 1", "ingredient 2"],
                   "allergens": ["potential allergen 1", "allergen 2"],
                   "health_notes": "brief health insights (high protein, low carb, etc.)",
-                  "confidence": 0.85
+                  "confidence": 0.85,
+
+                  "cooking_method": "grilled",
+                  "nova_score": 1.5,
+                  "is_ultra_processed": false,
+                  "is_fried": false,
+                  "has_refined_grains": false,
+                  "estimated_gi": 45,
+                  "estimated_gl": 13,
+                  "plant_count": 2,
+                  "unique_plants": ["broccoli", "garlic"],
+                  "is_fermented": false,
+                  "protein_source_type": "animal",
+                  "fat_quality": "healthy",
+                  "meal_type_guess": "dinner"
                 }
+
+                Field definitions:
+                - cooking_method: raw/steamed/boiled/grilled/baked/fried/roasted/pressure_cooked/sauteed (choose most prominent method)
+                - nova_score: 1-4 decimal (1=unprocessed whole foods, 2=processed culinary ingredients, 3=processed foods, 4=ultra-processed)
+                - is_ultra_processed: true if packaged snacks, soda, frozen meals, fast food, candy
+                - is_fried: true if deep fried or pan fried in significant oil
+                - has_refined_grains: true if contains white bread, white rice, regular pasta, or refined flour products
+                - estimated_gi: glycemic index 0-100 (low <55, medium 55-69, high 70+). Consider cooking method and food form.
+                - estimated_gl: glycemic load (low <10, medium 10-19, high 20+). GL = (GI × carbs) / 100
+                - plant_count: number of unique plant species visible (tomato=1, onion=1, etc.)
+                - unique_plants: list each plant by name (e.g., ["broccoli", "tomato", "basil", "rice"])
+                - is_fermented: true if contains yogurt, kefir, kimchi, sauerkraut, tempeh, miso, sourdough, kombucha
+                - protein_source_type: "animal" (meat/poultry/fish), "plant" (legumes/tofu), "dairy" (milk/cheese/yogurt), "seafood", "mixed", or "none"
+                - fat_quality: "healthy" (olive oil, avocado, nuts, fish), "neutral" (butter, lean meat), "unhealthy" (trans fats, deep fried)
+                - meal_type_guess: "breakfast", "lunch", "dinner", or "snack" based on food types and portion
 
                 Rules:
                 - All numeric fields must be numbers (not strings)
-                - Use 0 for unknown values (never use null or omit required fields)
-                - serving_size must be a string describing the portion
-                - ingredients should list main components you can identify
-                - allergens should list common allergens (dairy, nuts, gluten, etc.)
-                - health_notes should be 1-2 sentences about nutritional highlights
-                - confidence should be 0.0-1.0 based on image clarity and food recognition
+                - All boolean fields must be true or false (not strings)
+                - Use 0 for unknown numeric values (never use null or omit fields)
+                - For nova_score, consider: whole foods=1, oils/butter/salt/sugar=2, canned/processed=3, packaged/industrial=4
+                - For GI/GL, use typical values: white bread~75, brown rice~50, lentils~30, vegetables~15-30
+                - Count ALL distinct plants, including herbs and spices if visible
+                - Be conservative with is_ultra_processed - only true for industrially manufactured foods
 
                 If this is NOT a food image, return exactly:
                 {"error": "Not a food item"}
@@ -393,17 +452,42 @@ public class OpenAIVisionService {
                   "ingredients": ["main ingredient 1", "ingredient 2"],
                   "allergens": ["potential allergen 1", "allergen 2"],
                   "health_notes": "brief health insights (high protein, low carb, etc.)",
-                  "confidence": 0.65
+                  "confidence": 0.65,
+
+                  "cooking_method": "grilled",
+                  "nova_score": 1.5,
+                  "is_ultra_processed": false,
+                  "is_fried": false,
+                  "has_refined_grains": false,
+                  "estimated_gi": 45,
+                  "estimated_gl": 13,
+                  "plant_count": 2,
+                  "unique_plants": ["broccoli", "garlic"],
+                  "is_fermented": false,
+                  "protein_source_type": "animal",
+                  "fat_quality": "healthy",
+                  "meal_type_guess": "dinner"
                 }
+
+                Field definitions:
+                - cooking_method: infer from description (fried, grilled, baked, boiled, steamed, raw, etc.)
+                - nova_score: 1-4 based on processing level described
+                - is_ultra_processed: true if fast food, packaged snacks, soda mentioned
+                - is_fried: true if description mentions frying or fried foods
+                - has_refined_grains: true if white bread/rice/pasta mentioned
+                - estimated_gi/gl: based on typical values for foods mentioned
+                - plant_count: count unique plants mentioned
+                - unique_plants: list plants by name
+                - is_fermented: true if yogurt, kimchi, sourdough, etc. mentioned
+                - protein_source_type: infer from description
+                - fat_quality: infer from cooking method and ingredients
+                - meal_type_guess: infer from description and typical meal patterns
 
                 Rules:
                 - All numeric fields must be numbers (not strings)
+                - All boolean fields must be true or false (not strings)
                 - Use 0 for unknown values (never use null or omit required fields)
-                - serving_size should be estimated from the description or use typical portions
-                - ingredients should list components mentioned or implied in the description
-                - allergens should list common allergens (dairy, nuts, gluten, etc.) based on the description
-                - health_notes should be 1-2 sentences about nutritional highlights
-                - confidence should be 0.0-1.0 (use lower values like 0.5-0.7 for text-only estimates)
+                - confidence should be 0.5-0.7 for text-only estimates (lower than image analysis)
 
                 Remember: Return ONLY the JSON object, nothing else.
                 Provide reasonable estimates based on typical nutritional values for similar foods.

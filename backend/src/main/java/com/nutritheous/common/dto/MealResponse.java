@@ -65,6 +65,46 @@ public class MealResponse {
     private Meal.AnalysisStatus analysisStatus;
     private LocalDateTime createdAt;
 
+    // Enhanced AI-extracted fields
+    @JsonProperty("cooking_method")
+    private String cookingMethod;
+
+    @JsonProperty("nova_score")
+    private Double novaScore;
+
+    @JsonProperty("is_ultra_processed")
+    private Boolean isUltraProcessed;
+
+    @JsonProperty("is_fried")
+    private Boolean isFried;
+
+    @JsonProperty("has_refined_grains")
+    private Boolean hasRefinedGrains;
+
+    @JsonProperty("estimated_gi")
+    private Integer estimatedGi;
+
+    @JsonProperty("estimated_gl")
+    private Integer estimatedGl;
+
+    @JsonProperty("plant_count")
+    private Integer plantCount;
+
+    @JsonProperty("unique_plants")
+    private List<String> uniquePlants;
+
+    @JsonProperty("is_fermented")
+    private Boolean isFermented;
+
+    @JsonProperty("protein_source_type")
+    private String proteinSourceType;
+
+    @JsonProperty("fat_quality")
+    private String fatQuality;
+
+    @JsonProperty("meal_type_guess")
+    private String mealTypeGuess;
+
     public static MealResponse fromMeal(Meal meal, GoogleCloudStorageService storageService) {
         // Generate fresh presigned URL from object name
         String imageUrl = "";
@@ -95,6 +135,20 @@ public class MealResponse {
                 .confidence(meal.getConfidence())
                 .analysisStatus(meal.getAnalysisStatus())
                 .createdAt(meal.getCreatedAt())
+                // Enhanced AI-extracted fields
+                .cookingMethod(meal.getCookingMethod())
+                .novaScore(meal.getNovaScore())
+                .isUltraProcessed(meal.getIsUltraProcessed())
+                .isFried(meal.getIsFried())
+                .hasRefinedGrains(meal.getHasRefinedGrains())
+                .estimatedGi(meal.getEstimatedGi())
+                .estimatedGl(meal.getEstimatedGl())
+                .plantCount(meal.getPlantCount())
+                .uniquePlants(meal.getUniquePlants())
+                .isFermented(meal.getIsFermented())
+                .proteinSourceType(meal.getProteinSourceType())
+                .fatQuality(meal.getFatQuality())
+                .mealTypeGuess(meal.getMealTypeGuess())
                 .build();
     }
 }

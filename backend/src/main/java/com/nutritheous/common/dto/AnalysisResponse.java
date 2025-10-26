@@ -51,4 +51,44 @@ public class AnalysisResponse {
     private String healthNotes;
 
     private Double confidence;
+
+    // Enhanced AI-extracted fields
+    @JsonProperty("cooking_method")
+    private String cookingMethod;
+
+    @JsonProperty("nova_score")
+    private Double novaScore;
+
+    @JsonProperty("is_ultra_processed")
+    private Boolean isUltraProcessed;
+
+    @JsonProperty("is_fried")
+    private Boolean isFried;
+
+    @JsonProperty("has_refined_grains")
+    private Boolean hasRefinedGrains;
+
+    @JsonProperty("estimated_gi")
+    private Integer estimatedGi;
+
+    @JsonProperty("estimated_gl")
+    private Integer estimatedGl;
+
+    @JsonProperty("plant_count")
+    private Integer plantCount;
+
+    @JsonProperty("unique_plants")
+    private List<String> uniquePlants;
+
+    @JsonProperty("is_fermented")
+    private Boolean isFermented;
+
+    @JsonProperty("protein_source_type")
+    private String proteinSourceType;
+
+    @JsonProperty("fat_quality")
+    private String fatQuality;
+
+    @JsonProperty("meal_type_guess")
+    private String mealTypeGuess;
 }

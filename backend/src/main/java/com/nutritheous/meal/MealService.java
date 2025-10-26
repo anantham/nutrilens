@@ -122,6 +122,22 @@ public class MealService {
         meal.setAllergens(analysisResponse.getAllergens());
         meal.setHealthNotes(analysisResponse.getHealthNotes());
         meal.setConfidence(analysisResponse.getConfidence());
+
+        // Enhanced AI-extracted fields
+        meal.setCookingMethod(analysisResponse.getCookingMethod());
+        meal.setNovaScore(analysisResponse.getNovaScore());
+        meal.setIsUltraProcessed(analysisResponse.getIsUltraProcessed());
+        meal.setIsFried(analysisResponse.getIsFried());
+        meal.setHasRefinedGrains(analysisResponse.getHasRefinedGrains());
+        meal.setEstimatedGi(analysisResponse.getEstimatedGi());
+        meal.setEstimatedGl(analysisResponse.getEstimatedGl());
+        meal.setPlantCount(analysisResponse.getPlantCount());
+        meal.setUniquePlants(analysisResponse.getUniquePlants());
+        meal.setIsFermented(analysisResponse.getIsFermented());
+        meal.setProteinSourceType(analysisResponse.getProteinSourceType());
+        meal.setFatQuality(analysisResponse.getFatQuality());
+        meal.setMealTypeGuess(analysisResponse.getMealTypeGuess());
+
         meal.setAnalysisStatus(Meal.AnalysisStatus.COMPLETED);
     }
 

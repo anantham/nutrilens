@@ -86,6 +86,51 @@ public class Meal {
     @Column
     private Double confidence;
 
+    // Enhanced AI-extracted fields
+    @Column(name = "cooking_method", length = 50)
+    private String cookingMethod;
+
+    @Column(name = "nova_score")
+    private Double novaScore;
+
+    @Column(name = "is_ultra_processed")
+    @Builder.Default
+    private Boolean isUltraProcessed = false;
+
+    @Column(name = "is_fried")
+    @Builder.Default
+    private Boolean isFried = false;
+
+    @Column(name = "has_refined_grains")
+    @Builder.Default
+    private Boolean hasRefinedGrains = false;
+
+    @Column(name = "estimated_gi")
+    private Integer estimatedGi;
+
+    @Column(name = "estimated_gl")
+    private Integer estimatedGl;
+
+    @Column(name = "plant_count")
+    private Integer plantCount;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "unique_plants", columnDefinition = "jsonb")
+    private java.util.List<String> uniquePlants;
+
+    @Column(name = "is_fermented")
+    @Builder.Default
+    private Boolean isFermented = false;
+
+    @Column(name = "protein_source_type", length = 50)
+    private String proteinSourceType;
+
+    @Column(name = "fat_quality", length = 20)
+    private String fatQuality;
+
+    @Column(name = "meal_type_guess", length = 20)
+    private String mealTypeGuess;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "analysis_status", length = 20)
     @Builder.Default
