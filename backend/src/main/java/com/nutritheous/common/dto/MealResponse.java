@@ -105,6 +105,44 @@ public class MealResponse {
     @JsonProperty("meal_type_guess")
     private String mealTypeGuess;
 
+    // Photo metadata fields
+    @JsonProperty("photo_captured_at")
+    private LocalDateTime photoCapturedAt;
+
+    @JsonProperty("photo_latitude")
+    private Double photoLatitude;
+
+    @JsonProperty("photo_longitude")
+    private Double photoLongitude;
+
+    @JsonProperty("photo_device_make")
+    private String photoDeviceMake;
+
+    @JsonProperty("photo_device_model")
+    private String photoDeviceModel;
+
+    // Location context fields
+    @JsonProperty("location_place_name")
+    private String locationPlaceName;
+
+    @JsonProperty("location_place_type")
+    private String locationPlaceType;
+
+    @JsonProperty("location_cuisine_type")
+    private String locationCuisineType;
+
+    @JsonProperty("location_price_level")
+    private Integer locationPriceLevel;
+
+    @JsonProperty("location_is_restaurant")
+    private Boolean locationIsRestaurant;
+
+    @JsonProperty("location_is_home")
+    private Boolean locationIsHome;
+
+    @JsonProperty("location_address")
+    private String locationAddress;
+
     public static MealResponse fromMeal(Meal meal, GoogleCloudStorageService storageService) {
         // Generate fresh presigned URL from object name
         String imageUrl = "";
@@ -149,6 +187,20 @@ public class MealResponse {
                 .proteinSourceType(meal.getProteinSourceType())
                 .fatQuality(meal.getFatQuality())
                 .mealTypeGuess(meal.getMealTypeGuess())
+                // Photo metadata
+                .photoCapturedAt(meal.getPhotoCapturedAt())
+                .photoLatitude(meal.getPhotoLatitude())
+                .photoLongitude(meal.getPhotoLongitude())
+                .photoDeviceMake(meal.getPhotoDeviceMake())
+                .photoDeviceModel(meal.getPhotoDeviceModel())
+                // Location context
+                .locationPlaceName(meal.getLocationPlaceName())
+                .locationPlaceType(meal.getLocationPlaceType())
+                .locationCuisineType(meal.getLocationCuisineType())
+                .locationPriceLevel(meal.getLocationPriceLevel())
+                .locationIsRestaurant(meal.getLocationIsRestaurant())
+                .locationIsHome(meal.getLocationIsHome())
+                .locationAddress(meal.getLocationAddress())
                 .build();
     }
 }
