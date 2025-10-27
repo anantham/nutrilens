@@ -108,6 +108,44 @@ class Meal extends Equatable {
   @JsonKey(name: 'createdAt')
   final DateTime? createdAt;
 
+  // Photo metadata fields
+  @JsonKey(name: 'photo_captured_at')
+  final DateTime? photoCapturedAt;
+
+  @JsonKey(name: 'photo_latitude')
+  final double? photoLatitude;
+
+  @JsonKey(name: 'photo_longitude')
+  final double? photoLongitude;
+
+  @JsonKey(name: 'photo_device_make')
+  final String? photoDeviceMake;
+
+  @JsonKey(name: 'photo_device_model')
+  final String? photoDeviceModel;
+
+  // Location context fields
+  @JsonKey(name: 'location_place_name')
+  final String? locationPlaceName;
+
+  @JsonKey(name: 'location_place_type')
+  final String? locationPlaceType;
+
+  @JsonKey(name: 'location_cuisine_type')
+  final String? locationCuisineType;
+
+  @JsonKey(name: 'location_price_level')
+  final int? locationPriceLevel;
+
+  @JsonKey(name: 'location_is_restaurant')
+  final bool? locationIsRestaurant;
+
+  @JsonKey(name: 'location_is_home')
+  final bool? locationIsHome;
+
+  @JsonKey(name: 'location_address')
+  final String? locationAddress;
+
   const Meal({
     required this.id,
     required this.mealTime,
@@ -132,6 +170,18 @@ class Meal extends Equatable {
     this.confidence,
     this.analysisStatus = AnalysisStatus.pending,
     this.createdAt,
+    this.photoCapturedAt,
+    this.photoLatitude,
+    this.photoLongitude,
+    this.photoDeviceMake,
+    this.photoDeviceModel,
+    this.locationPlaceName,
+    this.locationPlaceType,
+    this.locationCuisineType,
+    this.locationPriceLevel,
+    this.locationIsRestaurant,
+    this.locationIsHome,
+    this.locationAddress,
   });
 
   factory Meal.fromJson(Map<String, dynamic> json) => _$MealFromJson(json);
@@ -163,6 +213,18 @@ class Meal extends Equatable {
         confidence,
         analysisStatus,
         createdAt,
+        photoCapturedAt,
+        photoLatitude,
+        photoLongitude,
+        photoDeviceMake,
+        photoDeviceModel,
+        locationPlaceName,
+        locationPlaceType,
+        locationCuisineType,
+        locationPriceLevel,
+        locationIsRestaurant,
+        locationIsHome,
+        locationAddress,
       ];
 
   Meal copyWith({
@@ -189,6 +251,18 @@ class Meal extends Equatable {
     double? confidence,
     AnalysisStatus? analysisStatus,
     DateTime? createdAt,
+    DateTime? photoCapturedAt,
+    double? photoLatitude,
+    double? photoLongitude,
+    String? photoDeviceMake,
+    String? photoDeviceModel,
+    String? locationPlaceName,
+    String? locationPlaceType,
+    String? locationCuisineType,
+    int? locationPriceLevel,
+    bool? locationIsRestaurant,
+    bool? locationIsHome,
+    String? locationAddress,
   }) {
     return Meal(
       id: id ?? this.id,
@@ -214,6 +288,18 @@ class Meal extends Equatable {
       confidence: confidence ?? this.confidence,
       analysisStatus: analysisStatus ?? this.analysisStatus,
       createdAt: createdAt ?? this.createdAt,
+      photoCapturedAt: photoCapturedAt ?? this.photoCapturedAt,
+      photoLatitude: photoLatitude ?? this.photoLatitude,
+      photoLongitude: photoLongitude ?? this.photoLongitude,
+      photoDeviceMake: photoDeviceMake ?? this.photoDeviceMake,
+      photoDeviceModel: photoDeviceModel ?? this.photoDeviceModel,
+      locationPlaceName: locationPlaceName ?? this.locationPlaceName,
+      locationPlaceType: locationPlaceType ?? this.locationPlaceType,
+      locationCuisineType: locationCuisineType ?? this.locationCuisineType,
+      locationPriceLevel: locationPriceLevel ?? this.locationPriceLevel,
+      locationIsRestaurant: locationIsRestaurant ?? this.locationIsRestaurant,
+      locationIsHome: locationIsHome ?? this.locationIsHome,
+      locationAddress: locationAddress ?? this.locationAddress,
     );
   }
 
@@ -247,4 +333,32 @@ class Meal extends Equatable {
 
   /// Check if the meal analysis has failed
   bool get isAnalysisFailed => analysisStatus == AnalysisStatus.failed;
+
+  /// Check if location data is available
+  bool get hasLocationData => locationPlaceName != null || (photoLatitude != null && photoLongitude != null);
+
+  /// Get a user-friendly location description
+  String? get locationDescription {
+    if (locationPlaceName != null) {
+      return locationPlaceName;
+    } else if (photoLatitude != null && photoLongitude != null) {
+      return 'Lat: ${photoLatitude!.toStringAsFixed(4)}, Lng: ${photoLongitude!.toStringAsFixed(4)}';
+    }
+    return null;
+  }
+
+  /// Get location badge text for UI
+  String? get locationBadge {
+    if (locationIsHome == true) {
+      return '🏠 Home-cooked';
+    } else if (locationIsRestaurant == true) {
+      if (locationPlaceName != null) {
+        return '🍽️ $locationPlaceName';
+      }
+      return '🍽️ Restaurant';
+    } else if (locationPlaceType != null) {
+      return '📍 ${locationPlaceType![0].toUpperCase()}${locationPlaceType!.substring(1)}';
+    }
+    return null;
+  }
 }

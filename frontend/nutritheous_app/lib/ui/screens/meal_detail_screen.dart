@@ -191,6 +191,12 @@ class _MealDetailScreenState extends ConsumerState<MealDetailScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Location Badge (if available)
+                  if (meal.hasLocationData) ...[
+                    _buildLocationBadge(context, meal),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Description (only show if there's also an image, to avoid duplication)
                   if (meal.description != null &&
                       meal.description!.isNotEmpty &&
@@ -407,5 +413,124 @@ class _MealDetailScreenState extends ConsumerState<MealDetailScreen> {
         );
       }
     }
+  }
+
+  Widget _buildLocationBadge(BuildContext context, Meal meal) {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Main location badge
+            if (meal.locationBadge != null)
+              Row(
+                children: [
+                  Text(
+                    meal.locationBadge!,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+
+            // Additional location details
+            if (meal.locationCuisineType != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.restaurant,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${meal.locationCuisineType![0].toUpperCase()}${meal.locationCuisineType!.substring(1)} cuisine',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            // Price level indicator
+            if (meal.locationPriceLevel != null && meal.locationPriceLevel! > 0) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.attach_money,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '\$' * meal.locationPriceLevel!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            // Address (if available and not at home)
+            if (meal.locationAddress != null && meal.locationIsHome != true) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      meal.locationAddress!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            // Photo timestamp (if different from meal time)
+            if (meal.photoCapturedAt != null &&
+                meal.photoCapturedAt != meal.mealTime) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.camera_alt,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Photo taken: ${DateFormat('MMM dd, yyyy - hh:mm a').format(meal.photoCapturedAt!)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }

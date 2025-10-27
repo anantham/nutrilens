@@ -158,6 +158,33 @@ class MealCard extends StatelessWidget {
                     ),
                   ),
 
+                  // Location Badge (if available)
+                  if (meal.hasLocationData) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (meal.locationBadge != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              meal.locationBadge!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSecondaryContainer,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+
                   // Description (only show if there's also an image, to avoid duplication)
                   if (meal.description != null &&
                       meal.description!.isNotEmpty &&
