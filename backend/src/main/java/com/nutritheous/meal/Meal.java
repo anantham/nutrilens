@@ -171,6 +171,14 @@ public class Meal {
     @Column(name = "location_address", length = 500)
     private String locationAddress;
 
+    // Telemetry and accuracy tracking
+    @Column(name = "user_edited")
+    @Builder.Default
+    private Boolean userEdited = false;
+
+    @Column(name = "raw_ai_response", columnDefinition = "TEXT")
+    private String rawAiResponse;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "analysis_status", length = 20)
     @Builder.Default

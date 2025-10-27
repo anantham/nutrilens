@@ -9,6 +9,8 @@ import com.nutritheous.common.exception.AnalyzerException;
 import com.nutritheous.common.exception.ResourceNotFoundException;
 import com.nutritheous.meal.dto.MealUpdateRequest;
 import com.nutritheous.storage.GoogleCloudStorageService;
+import com.nutritheous.telemetry.AiCorrectionLog;
+import com.nutritheous.telemetry.AiCorrectionLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +45,9 @@ public class MealService {
 
     @Autowired
     private com.nutritheous.service.LocationContextService locationContextService;
+
+    @Autowired
+    private AiCorrectionLogRepository correctionLogRepository;
 
     @Transactional
     public MealResponse uploadMeal(
@@ -252,6 +257,8 @@ public class MealService {
             throw new ResourceNotFoundException("Meal not found with id: " + mealId);
         }
 
+        boolean anyFieldChanged = false;
+
         // Update meal metadata (only update non-null fields)
         if (request.getMealType() != null) {
             meal.setMealType(request.getMealType());
@@ -266,32 +273,51 @@ public class MealService {
             meal.setServingSize(request.getServingSize());
         }
 
-        // Update nutritional information
+        // Update nutritional information and track corrections
         if (request.getCalories() != null) {
+            anyFieldChanged |= trackCorrection(meal, "calories",
+                    meal.getCalories() != null ? meal.getCalories().doubleValue() : null,
+                    request.getCalories().doubleValue());
             meal.setCalories(request.getCalories());
         }
+
         if (request.getProteinG() != null) {
+            anyFieldChanged |= trackCorrection(meal, "protein_g", meal.getProteinG(), request.getProteinG());
             meal.setProteinG(request.getProteinG());
         }
+
         if (request.getFatG() != null) {
+            anyFieldChanged |= trackCorrection(meal, "fat_g", meal.getFatG(), request.getFatG());
             meal.setFatG(request.getFatG());
         }
+
         if (request.getSaturatedFatG() != null) {
+            anyFieldChanged |= trackCorrection(meal, "saturated_fat_g", meal.getSaturatedFatG(), request.getSaturatedFatG());
             meal.setSaturatedFatG(request.getSaturatedFatG());
         }
+
         if (request.getCarbohydratesG() != null) {
+            anyFieldChanged |= trackCorrection(meal, "carbohydrates_g", meal.getCarbohydratesG(), request.getCarbohydratesG());
             meal.setCarbohydratesG(request.getCarbohydratesG());
         }
+
         if (request.getFiberG() != null) {
+            anyFieldChanged |= trackCorrection(meal, "fiber_g", meal.getFiberG(), request.getFiberG());
             meal.setFiberG(request.getFiberG());
         }
+
         if (request.getSugarG() != null) {
+            anyFieldChanged |= trackCorrection(meal, "sugar_g", meal.getSugarG(), request.getSugarG());
             meal.setSugarG(request.getSugarG());
         }
+
         if (request.getSodiumMg() != null) {
+            anyFieldChanged |= trackCorrection(meal, "sodium_mg", meal.getSodiumMg(), request.getSodiumMg());
             meal.setSodiumMg(request.getSodiumMg());
         }
+
         if (request.getCholesterolMg() != null) {
+            anyFieldChanged |= trackCorrection(meal, "cholesterol_mg", meal.getCholesterolMg(), request.getCholesterolMg());
             meal.setCholesterolMg(request.getCholesterolMg());
         }
 
@@ -304,6 +330,12 @@ public class MealService {
         }
         if (request.getHealthNotes() != null) {
             meal.setHealthNotes(request.getHealthNotes());
+        }
+
+        // Mark as user-edited if any nutritional field changed
+        if (anyFieldChanged) {
+            meal.setUserEdited(true);
+            logger.info("Meal {} marked as user-edited due to corrections", mealId);
         }
 
         meal = mealRepository.save(meal);
@@ -334,5 +366,58 @@ public class MealService {
         // Delete meal from database
         mealRepository.delete(meal);
         logger.info("Deleted meal with id: {}", mealId);
+    }
+
+    /**
+     * Track user correction to AI value.
+     * Logs correction to ai_correction_logs table for accuracy measurement.
+     *
+     * @param meal The meal being updated
+     * @param fieldName Name of the field being corrected (e.g., "calories", "protein_g")
+     * @param aiValue Original AI value
+     * @param userValue User-corrected value
+     * @return true if correction was tracked (field changed), false otherwise
+     */
+    private boolean trackCorrection(Meal meal, String fieldName, Double aiValue, Double userValue) {
+        // Only track if both values are present and different
+        if (userValue == null || aiValue == null) {
+            return false;
+        }
+
+        // Check if value actually changed (with tolerance for floating point comparison)
+        if (Math.abs(userValue - aiValue) < 0.01) {
+            return false; // No significant change
+        }
+
+        // Value changed - this is a correction!
+        // Calculate percent error
+        Double percentError = AiCorrectionLog.calculatePercentError(aiValue, userValue);
+
+        // Create correction log
+        AiCorrectionLog correctionLog = AiCorrectionLog.builder()
+                .meal(meal)
+                .user(meal.getUser())
+                .fieldName(fieldName)
+                .aiValue(aiValue)
+                .userValue(userValue)
+                .percentError(percentError)
+                .confidenceScore(meal.getConfidence())
+                .locationType(meal.getLocationPlaceType())
+                .locationIsRestaurant(meal.getLocationIsRestaurant())
+                .locationIsHome(meal.getLocationIsHome())
+                .mealDescription(meal.getDescription())
+                .mealTime(meal.getMealTime())
+                .aiAnalyzedAt(meal.getCreatedAt())
+                .build();
+
+        correctionLogRepository.save(correctionLog);
+
+        // Log the correction
+        logger.info("AI correction tracked - meal: {}, field: {}, AI: {}, user: {}, error: {}%, confidence: {}, location: {}",
+                meal.getId(), fieldName, aiValue, userValue,
+                percentError != null ? String.format("%.1f", percentError) : "N/A",
+                meal.getConfidence(), meal.getLocationPlaceType());
+
+        return true; // Correction was tracked
     }
 }

@@ -18,4 +18,6 @@ public interface MealRepository extends JpaRepository<Meal, UUID> {
     List<Meal> findByUserIdAndMealTypeOrderByMealTimeDesc(UUID userId, Meal.MealType mealType);
 
     List<Meal> findByAnalysisStatus(Meal.AnalysisStatus status);
+
+    Long countByUserId(UUID userId);
 }
