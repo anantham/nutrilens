@@ -24,7 +24,7 @@ public class AnalyzerDebugController {
             @RequestParam String imageUrl,
             @RequestParam(required = false) String description) {
         try {
-            AnalysisResponse response = analyzerService.analyzeImage(imageUrl, description);
+            AnalysisResponse response = analyzerService.analyzeImage(imageUrl, description, null, null);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             throw new RuntimeException("Analyzer test failed: " + e.getMessage(), e);

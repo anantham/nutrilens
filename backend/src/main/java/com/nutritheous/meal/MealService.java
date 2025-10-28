@@ -9,6 +9,10 @@ import com.nutritheous.common.exception.AnalyzerException;
 import com.nutritheous.common.exception.ResourceNotFoundException;
 import com.nutritheous.meal.dto.MealUpdateRequest;
 import com.nutritheous.storage.GoogleCloudStorageService;
+import com.nutritheous.validation.AiValidationService;
+import com.nutritheous.validation.ValidationFailure;
+import com.nutritheous.validation.ValidationFailureRepository;
+import com.nutritheous.validation.ValidationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +47,12 @@ public class MealService {
 
     @Autowired
     private com.nutritheous.service.LocationContextService locationContextService;
+
+    @Autowired
+    private AiValidationService validationService;
+
+    @Autowired
+    private ValidationFailureRepository validationFailureRepository;
 
     @Transactional
     public MealResponse uploadMeal(
@@ -171,7 +181,45 @@ public class MealService {
     }
 
     private void updateMealWithAnalysis(Meal meal, AnalysisResponse analysisResponse) {
-        // Update meal with analysis results - map all fields (note: description is kept from user input, not AI)
+        // STEP 1: Validate AI response for sanity checks
+        ValidationResult validation = validationService.validate(analysisResponse);
+
+        // STEP 2: Handle validation failures
+        if (!validation.isValid()) {
+            logger.error("AI returned invalid data for meal {}: {} errors, {} warnings",
+                    meal.getId(),
+                    validation.getErrors().size(),
+                    validation.getWarnings().size());
+
+            // Log each error
+            validation.getErrors().forEach(error ->
+                    logger.error("  ERROR - {}: {}", error.getField(), error.getMessage()));
+
+            // Store validation failure for analysis
+            ValidationFailure failure = ValidationFailure.builder()
+                    .meal(meal)
+                    .issueCount(validation.getIssues().size())
+                    .errorCount(validation.getErrors().size())
+                    .warningCount(validation.getWarnings().size())
+                    .issues(validation.getIssues())
+                    .confidenceScore(analysisResponse.getConfidence())
+                    .mealDescription(meal.getDescription())
+                    .build();
+
+            validationFailureRepository.save(failure);
+
+            // Mark meal as failed - don't save invalid AI data
+            meal.setAnalysisStatus(Meal.AnalysisStatus.FAILED);
+            logger.warn("Meal {} marked as FAILED due to validation errors", meal.getId());
+            return;
+        }
+
+        // STEP 3: Log warnings (suspicious but not invalid)
+        validation.getWarnings().forEach(warning ->
+                logger.warn("AI validation warning for meal {}: {} - {}",
+                        meal.getId(), warning.getField(), warning.getMessage()));
+
+        // STEP 4: Update meal with validated data
         meal.setServingSize(analysisResponse.getServingSize());
         meal.setCalories(analysisResponse.getCalories());
         meal.setProteinG(analysisResponse.getProteinG());
