@@ -91,4 +91,11 @@ public class AnalysisResponse {
 
     @JsonProperty("meal_type_guess")
     private String mealTypeGuess;
+
+    /**
+     * Raw AI JSON response (for extracting additional fields like ingredient_breakdown)
+     * Not serialized to API responses - internal use only
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String rawAiResponse;
 }

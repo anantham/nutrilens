@@ -44,6 +44,9 @@ public class MealService {
     @Autowired
     private com.nutritheous.service.LocationContextService locationContextService;
 
+    @Autowired
+    private com.nutritheous.ingredient.IngredientExtractionService ingredientExtractionService;
+
     @Transactional
     public MealResponse uploadMeal(
             UUID userId,
@@ -144,6 +147,11 @@ public class MealService {
                 AnalysisResponse analysisResponse = analyzerService.analyzeImage(
                         tempAnalyzerUrl, description, locationContext, effectiveMealTime);
                 updateMealWithAnalysis(meal, analysisResponse);
+
+                // Extract and save ingredients from AI response
+                ingredientExtractionService.extractAndSaveIngredients(
+                        meal, analysisResponse.getRawAiResponse(), analysisResponse, meal.getConfidence());
+
             } else if (description != null && !description.isBlank()) {
                 logger.info("Analyzing text-only meal with context - description: {}, location: {}, time: {}",
                         description,
@@ -152,6 +160,10 @@ public class MealService {
                 AnalysisResponse analysisResponse = analyzerService.analyzeTextOnly(
                         description, locationContext, effectiveMealTime);
                 updateMealWithAnalysis(meal, analysisResponse);
+
+                // Extract and save ingredients from AI response
+                ingredientExtractionService.extractAndSaveIngredients(
+                        meal, analysisResponse.getRawAiResponse(), analysisResponse, meal.getConfidence());
             } else {
                 // This shouldn't happen due to validation in controller, but handle it
                 logger.warn("Meal {} has neither image nor description", mealId);

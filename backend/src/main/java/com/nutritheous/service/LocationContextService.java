@@ -135,9 +135,10 @@ public class LocationContextService {
         }
 
         // Price level (1-4 scale)
-        if (place.priceLevel != null) {
-            builder.priceLevel(place.priceLevel.ordinal() + 1);  // Convert enum to 1-4
-        }
+        // TODO: priceLevel field not available in current Google Maps API version
+        // if (place.priceLevel != null) {
+        //     builder.priceLevel(place.priceLevel.ordinal() + 1);  // Convert enum to 1-4
+        // }
 
         return builder.build();
     }
