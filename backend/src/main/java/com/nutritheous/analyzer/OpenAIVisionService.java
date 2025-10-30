@@ -146,6 +146,9 @@ public class OpenAIVisionService {
             String cleanedContent = cleanJsonResponse(content);
             log.debug("Cleaned response: {}", cleanedContent);
 
+            // Store raw content for ingredient extraction
+            String rawAiResponse = cleanedContent;
+
             // Parse JSON
             JsonNode jsonNode = objectMapper.readTree(cleanedContent);
 
@@ -184,6 +187,7 @@ public class OpenAIVisionService {
                     .proteinSourceType(getStringValue(jsonNode, "protein_source_type"))
                     .fatQuality(getStringValue(jsonNode, "fat_quality"))
                     .mealTypeGuess(getStringValue(jsonNode, "meal_type_guess"))
+                    .rawAiResponse(rawAiResponse)  // Store raw JSON for ingredient extraction
                     .build();
 
             log.info("Successfully parsed nutrition response");
@@ -415,7 +419,24 @@ public class OpenAIVisionService {
                   "is_fermented": false,
                   "protein_source_type": "animal",
                   "fat_quality": "healthy",
-                  "meal_type_guess": "dinner"
+                  "meal_type_guess": "dinner",
+
+                  "ingredient_breakdown": [
+                    {
+                      "name": "ingredient name",
+                      "category": "grain",
+                      "quantity": 100.0,
+                      "unit": "g",
+                      "calories": 120,
+                      "protein_g": 4.5,
+                      "fat_g": 1.2,
+                      "saturated_fat_g": 0.3,
+                      "carbohydrates_g": 22.0,
+                      "fiber_g": 2.5,
+                      "sugar_g": 0.5,
+                      "sodium_mg": 150.0
+                    }
+                  ]
                 }
 
                 Field definitions:
@@ -432,6 +453,15 @@ public class OpenAIVisionService {
                 - protein_source_type: "animal" (meat/poultry/fish), "plant" (legumes/tofu), "dairy" (milk/cheese/yogurt), "seafood", "mixed", or "none"
                 - fat_quality: "healthy" (olive oil, avocado, nuts, fish), "neutral" (butter, lean meat), "unhealthy" (trans fats, deep fried)
                 - meal_type_guess: "breakfast", "lunch", "dinner", or "snack" based on food types and portion
+                - ingredient_breakdown: CRITICAL - Break down meal into individual ingredients with quantities and nutrition per serving
+                  * name: specific ingredient (e.g., "idli", "sambar", "ghee")
+                  * category: grain/protein/vegetable/fat/dairy/spice/condiment/beverage
+                  * quantity: estimated amount for this serving
+                  * unit: g, ml, piece, tsp, tbsp, cup (prefer metric)
+                  * nutrition: per THIS serving (not per 100g)
+                  * For complex meals (South Indian, restaurant), identify each component
+                  * Sum of ingredient nutrition should match overall meal nutrition
+                  * Return empty array [] if breakdown not possible
 
                 Rules:
                 - All numeric fields must be numbers (not strings)
@@ -501,7 +531,24 @@ public class OpenAIVisionService {
                   "is_fermented": false,
                   "protein_source_type": "animal",
                   "fat_quality": "healthy",
-                  "meal_type_guess": "dinner"
+                  "meal_type_guess": "dinner",
+
+                  "ingredient_breakdown": [
+                    {
+                      "name": "ingredient name",
+                      "category": "grain",
+                      "quantity": 100.0,
+                      "unit": "g",
+                      "calories": 120,
+                      "protein_g": 4.5,
+                      "fat_g": 1.2,
+                      "saturated_fat_g": 0.3,
+                      "carbohydrates_g": 22.0,
+                      "fiber_g": 2.5,
+                      "sugar_g": 0.5,
+                      "sodium_mg": 150.0
+                    }
+                  ]
                 }
 
                 Field definitions:
@@ -517,6 +564,9 @@ public class OpenAIVisionService {
                 - protein_source_type: infer from description
                 - fat_quality: infer from cooking method and ingredients
                 - meal_type_guess: infer from description and typical meal patterns
+                - ingredient_breakdown: Break down meal into individual ingredients based on description
+                  * Estimate quantities and nutrition for each ingredient
+                  * Return empty array [] if description too vague
 
                 Rules:
                 - All numeric fields must be numbers (not strings)

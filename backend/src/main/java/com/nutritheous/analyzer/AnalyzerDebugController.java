@@ -24,6 +24,7 @@ public class AnalyzerDebugController {
             @RequestParam String imageUrl,
             @RequestParam(required = false) String description) {
         try {
+            // Pass null for location and time context in debug endpoint
             AnalysisResponse response = analyzerService.analyzeImage(imageUrl, description, null, null);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
