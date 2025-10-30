@@ -97,6 +97,15 @@ public class IngredientController {
 
         UUID userId = UUID.fromString(authentication.getName());
 
+        // Verify ingredient exists
+        MealIngredient ingredient = mealIngredientRepository.findById(ingredientId)
+                .orElseThrow(() -> new RuntimeException("Ingredient not found: " + ingredientId));
+
+        // Verify ingredient belongs to the specified meal
+        if (!ingredient.getMeal().getId().equals(mealId)) {
+            throw new RuntimeException("Ingredient does not belong to this meal");
+        }
+
         // Verify meal belongs to user
         Meal meal = mealRepository.findById(mealId)
                 .orElseThrow(() -> new RuntimeException("Meal not found: " + mealId));
@@ -148,6 +157,15 @@ public class IngredientController {
             Authentication authentication) {
 
         UUID userId = UUID.fromString(authentication.getName());
+
+        // Verify ingredient exists
+        MealIngredient ingredient = mealIngredientRepository.findById(ingredientId)
+                .orElseThrow(() -> new RuntimeException("Ingredient not found: " + ingredientId));
+
+        // Verify ingredient belongs to the specified meal
+        if (!ingredient.getMeal().getId().equals(mealId)) {
+            throw new RuntimeException("Ingredient does not belong to this meal");
+        }
 
         // Verify meal belongs to user
         Meal meal = mealRepository.findById(mealId)
@@ -207,5 +225,86 @@ public class IngredientController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(responses);
+    }
+
+    /**
+     * Get statistics about user's learned ingredient library.
+     */
+    @GetMapping("/ingredients/library/stats")
+    @Operation(summary = "Get library statistics", description = "Get statistics about learned ingredients (total count, avg confidence, top ingredients)")
+    public ResponseEntity<com.nutritheous.ingredient.dto.IngredientLibraryStatsResponse> getLibraryStats(
+            Authentication authentication) {
+
+        UUID userId = UUID.fromString(authentication.getName());
+
+        List<UserIngredientLibrary> allIngredients = userIngredientLibraryRepository
+                .findByUserIdOrderByConfidenceScoreDesc(userId);
+
+        if (allIngredients.isEmpty()) {
+            // Return empty stats if no ingredients learned yet
+            return ResponseEntity.ok(com.nutritheous.ingredient.dto.IngredientLibraryStatsResponse.builder()
+                    .totalIngredients(0)
+                    .highConfidenceCount(0)
+                    .avgConfidenceScore(0.0)
+                    .totalCorrections(0)
+                    .build());
+        }
+
+        // Calculate statistics
+        int totalIngredients = allIngredients.size();
+        long highConfidenceCount = allIngredients.stream()
+                .filter(i -> i.getConfidenceScore() != null && i.getConfidenceScore() >= 0.7)
+                .count();
+        double avgConfidence = allIngredients.stream()
+                .filter(i -> i.getConfidenceScore() != null)
+                .mapToDouble(UserIngredientLibrary::getConfidenceScore)
+                .average()
+                .orElse(0.0);
+        int totalCorrections = allIngredients.stream()
+                .mapToInt(i -> i.getSampleSize() != null ? i.getSampleSize() : 0)
+                .sum();
+
+        // Find most frequent ingredient (highest sample size)
+        UserIngredientLibrary mostFrequent = allIngredients.stream()
+                .max((a, b) -> Integer.compare(
+                        a.getSampleSize() != null ? a.getSampleSize() : 0,
+                        b.getSampleSize() != null ? b.getSampleSize() : 0))
+                .orElse(null);
+
+        // Find highest confidence ingredient (already sorted by confidence desc)
+        UserIngredientLibrary highestConfidence = allIngredients.get(0);
+
+        // Find most recent ingredient
+        UserIngredientLibrary mostRecent = allIngredients.stream()
+                .filter(i -> i.getLastUsed() != null)
+                .max((a, b) -> a.getLastUsed().compareTo(b.getLastUsed()))
+                .orElse(null);
+
+        com.nutritheous.ingredient.dto.IngredientLibraryStatsResponse response =
+                com.nutritheous.ingredient.dto.IngredientLibraryStatsResponse.builder()
+                        .totalIngredients(totalIngredients)
+                        .highConfidenceCount((int) highConfidenceCount)
+                        .avgConfidenceScore(avgConfidence)
+                        .totalCorrections(totalCorrections)
+                        .mostFrequentIngredient(mostFrequent != null ? buildTopIngredient(mostFrequent) : null)
+                        .highestConfidenceIngredient(buildTopIngredient(highestConfidence))
+                        .mostRecentIngredient(mostRecent != null ? buildTopIngredient(mostRecent) : null)
+                        .build();
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Helper method to build TopIngredient DTO.
+     */
+    private com.nutritheous.ingredient.dto.IngredientLibraryStatsResponse.TopIngredient buildTopIngredient(
+            UserIngredientLibrary ingredient) {
+        return com.nutritheous.ingredient.dto.IngredientLibraryStatsResponse.TopIngredient.builder()
+                .name(ingredient.getIngredientName())
+                .category(ingredient.getIngredientCategory())
+                .sampleSize(ingredient.getSampleSize())
+                .confidenceScore(ingredient.getConfidenceScore())
+                .lastUsed(ingredient.getLastUsed() != null ? ingredient.getLastUsed().toString() : null)
+                .build();
     }
 }

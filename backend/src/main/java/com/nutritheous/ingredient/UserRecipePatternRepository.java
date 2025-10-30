@@ -1,5 +1,6 @@
 package com.nutritheous.ingredient;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -52,11 +53,12 @@ public interface UserRecipePatternRepository extends JpaRepository<UserRecipePat
 
     /**
      * Get user's most frequently made recipes (top N)
+     * Use PageRequest.of(0, limit) to limit results
      */
     @Query("SELECT r FROM UserRecipePattern r WHERE r.user.id = :userId " +
-           "ORDER BY r.timesMade DESC LIMIT :limit")
+           "ORDER BY r.timesMade DESC")
     List<UserRecipePattern> findTopRecipes(
             @Param("userId") UUID userId,
-            @Param("limit") Integer limit
+            Pageable pageable
     );
 }

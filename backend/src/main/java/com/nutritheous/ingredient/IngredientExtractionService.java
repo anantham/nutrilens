@@ -21,12 +21,15 @@ public class IngredientExtractionService {
 
     private final MealIngredientRepository mealIngredientRepository;
     private final ObjectMapper objectMapper;
+    private final IngredientLearningService learningService;
 
     public IngredientExtractionService(
             MealIngredientRepository mealIngredientRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            IngredientLearningService learningService) {
         this.mealIngredientRepository = mealIngredientRepository;
         this.objectMapper = objectMapper;
+        this.learningService = learningService;
         log.info("IngredientExtractionService initialized");
     }
 
@@ -277,6 +280,7 @@ public class IngredientExtractionService {
 
     /**
      * Update an ingredient (when user corrects it).
+     * Triggers learning service to update user's ingredient library.
      */
     @Transactional
     public MealIngredient updateIngredient(
@@ -285,6 +289,9 @@ public class IngredientExtractionService {
     ) {
         MealIngredient ingredient = mealIngredientRepository.findById(ingredientId)
                 .orElseThrow(() -> new RuntimeException("Ingredient not found: " + ingredientId));
+
+        // Store original values for learning comparison
+        boolean wasAiGenerated = ingredient.getIsAiExtracted() && !ingredient.getIsUserCorrected();
 
         // Update fields
         ingredient.setIngredientName(request.getIngredientName());
@@ -307,7 +314,28 @@ public class IngredientExtractionService {
         // Mark as user corrected
         ingredient.setIsUserCorrected(true);
 
-        return mealIngredientRepository.save(ingredient);
+        // Save the updated ingredient
+        MealIngredient savedIngredient = mealIngredientRepository.save(ingredient);
+
+        // Trigger learning from user correction
+        // Only learn if this was a correction to AI-generated or previously corrected data
+        if (savedIngredient.getMeal() != null && savedIngredient.getMeal().getUser() != null) {
+            try {
+                learningService.learnFromCorrection(savedIngredient, savedIngredient.getMeal().getUser());
+                log.info("Learning triggered for ingredient '{}' (user: {})",
+                        savedIngredient.getIngredientName(),
+                        savedIngredient.getMeal().getUser().getId());
+            } catch (Exception e) {
+                // Don't fail the update if learning fails
+                log.error("Failed to learn from correction for ingredient {}: {}",
+                        savedIngredient.getIngredientName(), e.getMessage(), e);
+            }
+        } else {
+            log.warn("Cannot trigger learning: ingredient {} missing meal or user reference",
+                    savedIngredient.getId());
+        }
+
+        return savedIngredient;
     }
 
     /**
