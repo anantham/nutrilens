@@ -290,9 +290,6 @@ public class IngredientExtractionService {
         MealIngredient ingredient = mealIngredientRepository.findById(ingredientId)
                 .orElseThrow(() -> new RuntimeException("Ingredient not found: " + ingredientId));
 
-        // Store original values for learning comparison
-        boolean wasAiGenerated = ingredient.getIsAiExtracted() && !ingredient.getIsUserCorrected();
-
         // Update fields
         ingredient.setIngredientName(request.getIngredientName());
         ingredient.setIngredientCategory(request.getIngredientCategory());
