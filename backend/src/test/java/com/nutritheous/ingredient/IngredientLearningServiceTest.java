@@ -348,6 +348,145 @@ class IngredientLearningServiceTest {
     }
 
     /**
+     * Test: CRITICAL BUG FIX - Unit mismatch does not corrupt typical quantity.
+     *
+     * Bug scenario: User logs "rice" as 100g, then logs "rice" as 2 pieces.
+     * OLD BUGGY CODE would calculate: 0.7 * 100 + 0.3 * 2 = 70.6 pieces (NONSENSE!)
+     * NEW FIXED CODE should skip update and keep original 100g.
+     */
+    @Test
+    void testLearnFromCorrection_UnitMismatch_DoesNotCorruptData() {
+        // Given: Existing "rice" with typical quantity 100g
+        UserIngredientLibrary existing = UserIngredientLibrary.builder()
+                .id(UUID.randomUUID())
+                .user(testUser)
+                .ingredientName("rice")
+                .normalizedName("rice")
+                .avgCaloriesPer100g(130.0)
+                .avgProteinPer100g(2.7)
+                .avgFatPer100g(0.3)
+                .avgCarbsPer100g(28.0)
+                .stdDevCalories(5.0)
+                .sampleSize(3)
+                .confidenceScore(0.6)
+                .typicalQuantity(100.0)  // 100 grams
+                .typicalUnit("g")         // Unit: grams
+                .lastUsed(LocalDateTime.now().minusDays(1))
+                .build();
+
+        // User logs rice as "2 pieces" (incompatible unit!)
+        MealIngredient ingredient = createIngredient("rice", 2.0, "piece", 156.0, 5.4, 0.6, 30.0);
+
+        when(normalizationService.normalize("rice")).thenReturn("rice");
+        when(libraryRepository.findByUserIdOrderByConfidenceScoreDesc(testUser.getId()))
+                .thenReturn(List.of(existing));
+        when(normalizationService.findBestMatch(eq("rice"), anyList(), anyInt()))
+                .thenReturn(Optional.of(existing));
+
+        // When
+        learningService.learnFromCorrection(ingredient, testUser);
+
+        // Then: Typical quantity should NOT be corrupted
+        ArgumentCaptor<UserIngredientLibrary> captor = ArgumentCaptor.forClass(UserIngredientLibrary.class);
+        verify(libraryRepository).save(captor.capture());
+
+        UserIngredientLibrary updated = captor.getValue();
+
+        // CRITICAL: Quantity should remain 100g, NOT become 70.6 pieces!
+        assertEquals(100.0, updated.getTypicalQuantity(), 0.01,
+                "Typical quantity should remain unchanged when units mismatch");
+        assertEquals("g", updated.getTypicalUnit(),
+                "Typical unit should remain 'g' when new unit is incompatible");
+
+        // Nutrition per-100g should still be updated (that's independent of unit)
+        assertEquals(4, updated.getSampleSize(), "Sample size should still increment");
+        assertTrue(updated.getAvgCaloriesPer100g() > 130.0 && updated.getAvgCaloriesPer100g() < 156.0,
+                "Nutrition averages should still update");
+    }
+
+    /**
+     * Test: Unit change from null to non-null should work (first observation).
+     */
+    @Test
+    void testLearnFromCorrection_UnitFromNullToValue_SetsUnit() {
+        // Given: Existing ingredient with no unit set
+        UserIngredientLibrary existing = UserIngredientLibrary.builder()
+                .id(UUID.randomUUID())
+                .user(testUser)
+                .ingredientName("rice")
+                .normalizedName("rice")
+                .avgCaloriesPer100g(130.0)
+                .sampleSize(1)
+                .confidenceScore(0.3)
+                .typicalQuantity(null)  // No quantity yet
+                .typicalUnit(null)      // No unit yet
+                .build();
+
+        // User provides quantity with unit
+        MealIngredient ingredient = createIngredient("rice", 100.0, "g", 130.0, 2.7, 0.3, 28.0);
+
+        when(normalizationService.normalize("rice")).thenReturn("rice");
+        when(libraryRepository.findByUserIdOrderByConfidenceScoreDesc(testUser.getId()))
+                .thenReturn(List.of(existing));
+        when(normalizationService.findBestMatch(eq("rice"), anyList(), anyInt()))
+                .thenReturn(Optional.of(existing));
+
+        // When
+        learningService.learnFromCorrection(ingredient, testUser);
+
+        // Then: Should adopt the new unit
+        ArgumentCaptor<UserIngredientLibrary> captor = ArgumentCaptor.forClass(UserIngredientLibrary.class);
+        verify(libraryRepository).save(captor.capture());
+
+        UserIngredientLibrary updated = captor.getValue();
+
+        assertEquals(100.0, updated.getTypicalQuantity(), "Should set initial quantity");
+        assertEquals("g", updated.getTypicalUnit(), "Should set initial unit");
+    }
+
+    /**
+     * Test: Same unit should allow weighted average (normal case).
+     */
+    @Test
+    void testLearnFromCorrection_SameUnit_UpdatesWithWeightedAverage() {
+        // Given: Existing "rice" with 100g
+        UserIngredientLibrary existing = UserIngredientLibrary.builder()
+                .id(UUID.randomUUID())
+                .user(testUser)
+                .ingredientName("rice")
+                .normalizedName("rice")
+                .avgCaloriesPer100g(130.0)
+                .sampleSize(3)
+                .confidenceScore(0.6)
+                .typicalQuantity(100.0)  // 100 grams
+                .typicalUnit("g")         // Unit: grams
+                .build();
+
+        // User logs rice as 150g (same unit!)
+        MealIngredient ingredient = createIngredient("rice", 150.0, "g", 195.0, 4.0, 0.5, 42.0);
+
+        when(normalizationService.normalize("rice")).thenReturn("rice");
+        when(libraryRepository.findByUserIdOrderByConfidenceScoreDesc(testUser.getId()))
+                .thenReturn(List.of(existing));
+        when(normalizationService.findBestMatch(eq("rice"), anyList(), anyInt()))
+                .thenReturn(Optional.of(existing));
+
+        // When
+        learningService.learnFromCorrection(ingredient, testUser);
+
+        // Then: Should calculate weighted average
+        ArgumentCaptor<UserIngredientLibrary> captor = ArgumentCaptor.forClass(UserIngredientLibrary.class);
+        verify(libraryRepository).save(captor.capture());
+
+        UserIngredientLibrary updated = captor.getValue();
+
+        // Weighted average: 0.7 * 100 + 0.3 * 150 = 70 + 45 = 115
+        assertEquals(115.0, updated.getTypicalQuantity(), 0.01,
+                "Should calculate weighted average when units match");
+        assertEquals("g", updated.getTypicalUnit(), "Unit should remain 'g'");
+    }
+
+    /**
      * Helper method to create test ingredients.
      */
     private MealIngredient createIngredient(
