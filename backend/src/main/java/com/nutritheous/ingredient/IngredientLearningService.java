@@ -195,17 +195,48 @@ public class IngredientLearningService {
         libraryEntry.setConfidenceScore(newConfidence);
 
         // Update typical quantity (weighted average: 70% old, 30% new)
-        if (ingredient.getQuantity() != null && libraryEntry.getTypicalQuantity() != null) {
-            double newQuantity = updateTypicalQuantity(
-                    libraryEntry.getTypicalQuantity(),
-                    ingredient.getQuantity()
-            );
-            libraryEntry.setTypicalQuantity(newQuantity);
-        }
+        // ONLY update if units are compatible to avoid meaningless mixed-unit averages
+        if (ingredient.getQuantity() != null) {
+            String newUnit = ingredient.getUnit();
+            String existingUnit = libraryEntry.getTypicalUnit();
+            Double existingQuantity = libraryEntry.getTypicalQuantity();
 
-        // Update typical unit (prefer more recent unit if changed)
-        if (ingredient.getUnit() != null) {
-            libraryEntry.setTypicalUnit(ingredient.getUnit());
+            // Determine if units are compatible for averaging
+            boolean unitsCompatible = false;
+            if (existingUnit == null && newUnit == null) {
+                // Both null - compatible
+                unitsCompatible = true;
+            } else if (existingUnit == null || newUnit == null) {
+                // One null, one not - adopt the non-null unit
+                unitsCompatible = true;
+                if (existingUnit == null && newUnit != null) {
+                    libraryEntry.setTypicalUnit(newUnit);
+                }
+            } else if (existingUnit.equals(newUnit)) {
+                // Both non-null and equal - compatible
+                unitsCompatible = true;
+            }
+            // else: both non-null and different - NOT compatible (original bug)
+
+            if (unitsCompatible) {
+                if (existingQuantity != null) {
+                    // Update via weighted average
+                    double newQuantity = updateTypicalQuantity(existingQuantity, ingredient.getQuantity());
+                    libraryEntry.setTypicalQuantity(newQuantity);
+                    log.debug("Updated typical quantity: {} {}",
+                            String.format("%.1f", newQuantity), libraryEntry.getTypicalUnit());
+                } else {
+                    // First time setting quantity
+                    libraryEntry.setTypicalQuantity(ingredient.getQuantity());
+                    libraryEntry.setTypicalUnit(newUnit);
+                    log.debug("Set initial typical quantity: {} {}",
+                            ingredient.getQuantity(), newUnit);
+                }
+            } else {
+                // Units incompatible - skip to avoid corrupting data
+                log.warn("Skipping typical quantity update for '{}': incompatible units ({} vs {})",
+                        libraryEntry.getIngredientName(), existingUnit, newUnit);
+            }
         }
 
         // Update last used timestamp
