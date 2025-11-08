@@ -21,10 +21,9 @@ import java.util.*;
 @Slf4j
 public class OpenAIVisionService {
 
-    private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final String apiUrl;
     private final String apiKey;
     private final String model;
     private final int maxTokens;
@@ -32,17 +31,19 @@ public class OpenAIVisionService {
     public OpenAIVisionService(
             RestTemplate restTemplate,
             @Value("${openai.api.key}") String apiKey,
+            @Value("${openai.api.url:https://api.openai.com/v1/chat/completions}") String apiUrl,
             @Value("${openai.api.model:gpt-4o-mini}") String model,
             @Value("${openai.api.max-tokens:800}") int maxTokens) {
 
         this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
+        this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.model = model;
         this.maxTokens = maxTokens;
 
-        log.info("OpenAI Vision Service initialized with model: {}, max tokens: {}",
-                model, maxTokens);
+        log.info("Vision Service initialized - URL: {}, Model: {}, Max Tokens: {}",
+                apiUrl, model, maxTokens);
     }
 
     /**
@@ -98,9 +99,9 @@ public class OpenAIVisionService {
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
             // Make the API call
-            log.debug("Calling OpenAI API: {}", OPENAI_API_URL);
+            log.debug("Calling Vision API: {}", apiUrl);
             ResponseEntity<String> response = restTemplate.exchange(
-                    OPENAI_API_URL,
+                    apiUrl,
                     HttpMethod.POST,
                     entity,
                     String.class
@@ -325,9 +326,9 @@ public class OpenAIVisionService {
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
             // Make the API call
-            log.debug("Calling OpenAI API for text-only analysis: {}", OPENAI_API_URL);
+            log.debug("Calling Vision API for text-only analysis: {}", apiUrl);
             ResponseEntity<String> response = restTemplate.exchange(
-                    OPENAI_API_URL,
+                    apiUrl,
                     HttpMethod.POST,
                     entity,
                     String.class
