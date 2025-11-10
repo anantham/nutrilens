@@ -9,6 +9,8 @@ import com.nutritheous.common.exception.AnalyzerException;
 import com.nutritheous.common.exception.ResourceNotFoundException;
 import com.nutritheous.meal.dto.MealUpdateRequest;
 import com.nutritheous.storage.GoogleCloudStorageService;
+import com.nutritheous.correction.AiCorrectionLog;
+import com.nutritheous.correction.AiCorrectionLogRepository;
 import com.nutritheous.validation.AiValidationService;
 import com.nutritheous.validation.ValidationFailure;
 import com.nutritheous.validation.ValidationFailureRepository;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -56,6 +59,9 @@ public class MealService {
 
     @Autowired
     private ValidationFailureRepository validationFailureRepository;
+
+    @Autowired
+    private AiCorrectionLogRepository correctionLogRepository;
 
     @Transactional
     public MealResponse uploadMeal(
@@ -326,32 +332,41 @@ public class MealService {
             meal.setServingSize(request.getServingSize());
         }
 
-        // Update nutritional information
+        // Update nutritional information (track corrections for AI accuracy telemetry)
         if (request.getCalories() != null) {
+            trackCorrection(meal, "calories", meal.getCalories(), request.getCalories());
             meal.setCalories(request.getCalories());
         }
         if (request.getProteinG() != null) {
+            trackCorrection(meal, "protein_g", meal.getProteinG(), request.getProteinG());
             meal.setProteinG(request.getProteinG());
         }
         if (request.getFatG() != null) {
+            trackCorrection(meal, "fat_g", meal.getFatG(), request.getFatG());
             meal.setFatG(request.getFatG());
         }
         if (request.getSaturatedFatG() != null) {
+            trackCorrection(meal, "saturated_fat_g", meal.getSaturatedFatG(), request.getSaturatedFatG());
             meal.setSaturatedFatG(request.getSaturatedFatG());
         }
         if (request.getCarbohydratesG() != null) {
+            trackCorrection(meal, "carbohydrates_g", meal.getCarbohydratesG(), request.getCarbohydratesG());
             meal.setCarbohydratesG(request.getCarbohydratesG());
         }
         if (request.getFiberG() != null) {
+            trackCorrection(meal, "fiber_g", meal.getFiberG(), request.getFiberG());
             meal.setFiberG(request.getFiberG());
         }
         if (request.getSugarG() != null) {
+            trackCorrection(meal, "sugar_g", meal.getSugarG(), request.getSugarG());
             meal.setSugarG(request.getSugarG());
         }
         if (request.getSodiumMg() != null) {
+            trackCorrection(meal, "sodium_mg", meal.getSodiumMg(), request.getSodiumMg());
             meal.setSodiumMg(request.getSodiumMg());
         }
         if (request.getCholesterolMg() != null) {
+            trackCorrection(meal, "cholesterol_mg", meal.getCholesterolMg(), request.getCholesterolMg());
             meal.setCholesterolMg(request.getCholesterolMg());
         }
 
@@ -394,5 +409,78 @@ public class MealService {
         // Delete meal from database
         mealRepository.delete(meal);
         logger.info("Deleted meal with id: {}", mealId);
+    }
+
+    /**
+     * Track user corrections to AI-generated nutrition data for telemetry.
+     *
+     * <p>When a user updates a nutrition field, compare the new value with the AI's original
+     * prediction and log the correction. This enables:
+     * - Measuring AI accuracy over time
+     * - Detecting systematic biases (e.g., AI underestimates restaurant meals)
+     * - Identifying which foods AI gets wrong
+     * - Improving future models with correction data
+     *
+     * @param meal The meal being updated
+     * @param fieldName Name of the field (e.g., "calories", "protein_g")
+     * @param aiValue AI's original prediction
+     * @param userValue User's corrected value
+     */
+    private void trackCorrection(Meal meal, String fieldName, Number aiValue, Number userValue) {
+        // Only track if both values exist and are different
+        if (aiValue == null || userValue == null) {
+            return;
+        }
+
+        // Convert to BigDecimal for comparison
+        BigDecimal aiValueBD = toBigDecimal(aiValue);
+        BigDecimal userValueBD = toBigDecimal(userValue);
+
+        // Only log if there's a meaningful difference (> 0.01 to avoid floating point issues)
+        if (aiValueBD.subtract(userValueBD).abs().compareTo(BigDecimal.valueOf(0.01)) <= 0) {
+            return; // Values are essentially the same, no correction needed
+        }
+
+        // Create correction log
+        AiCorrectionLog correctionLog = AiCorrectionLog.builder()
+                .meal(meal)
+                .user(meal.getUser())
+                .fieldName(fieldName)
+                .aiValue(aiValueBD)
+                .userValue(userValueBD)
+                // Errors are auto-calculated in the builder
+                .confidenceScore(meal.getConfidence() != null ? BigDecimal.valueOf(meal.getConfidence()) : null)
+                .locationType(meal.getLocationPlaceType())
+                .locationPlaceName(meal.getLocationPlaceName())
+                .mealType(meal.getMealType() != null ? meal.getMealType().name().toLowerCase() : null)
+                .mealDescription(meal.getDescription())
+                .aiAnalyzedAt(meal.getCreatedAt())
+                .correctedAt(LocalDateTime.now())
+                .build();
+
+        correctionLogRepository.save(correctionLog);
+
+        logger.info("Tracked correction for meal {} - {}: AI={}, User={}, Error={}%",
+                meal.getId(), fieldName, aiValueBD, userValueBD,
+                correctionLog.getPercentError() != null ? correctionLog.getPercentError() : "N/A");
+    }
+
+    /**
+     * Helper to convert Number to BigDecimal safely
+     */
+    private BigDecimal toBigDecimal(Number value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Integer) {
+            return BigDecimal.valueOf((Integer) value);
+        }
+        if (value instanceof Double) {
+            return BigDecimal.valueOf((Double) value);
+        }
+        return new BigDecimal(value.toString());
     }
 }
