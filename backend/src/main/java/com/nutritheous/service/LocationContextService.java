@@ -6,8 +6,11 @@ import com.google.maps.PlacesApi;
 import com.google.maps.errors.ApiException;
 import com.google.maps.model.*;
 import com.nutritheous.common.dto.LocationContext;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -53,10 +56,17 @@ public class LocationContextService {
     /**
      * Get location context from GPS coordinates.
      *
+     * Uses circuit breaker to prevent cascading failures when Google Maps API is down.
+     * Implements rate limiting to stay within API quotas (100 requests/minute).
+     * Caches results in Redis for 24 hours to reduce API calls and costs.
+     *
      * @param latitude  Latitude coordinate
      * @param longitude Longitude coordinate
      * @return LocationContext with place information
      */
+    @CircuitBreaker(name = "googlemaps", fallbackMethod = "getLocationContextFallback")
+    @RateLimiter(name = "googlemaps")
+    @Cacheable(value = "googleMapsGeocode", key = "#latitude + '_' + #longitude", unless = "#result == null || !#result.isKnown()")
     public LocationContext getLocationContext(Double latitude, Double longitude) {
         if (latitude == null || longitude == null) {
             log.debug("No GPS coordinates provided");
@@ -106,6 +116,21 @@ public class LocationContextService {
             log.error("Unexpected error getting location context: {}", e.getMessage(), e);
             return LocationContext.unknown();
         }
+    }
+
+    /**
+     * Fallback method for getLocationContext when Google Maps API is unavailable.
+     * Returns unknown location context to allow graceful degradation.
+     *
+     * @param latitude  Latitude coordinate
+     * @param longitude Longitude coordinate
+     * @param exception The exception that triggered the fallback
+     * @return Unknown location context
+     */
+    private LocationContext getLocationContextFallback(Double latitude, Double longitude, Exception exception) {
+        log.warn("Google Maps API unavailable for coordinates ({}, {}), returning unknown location. Reason: {}",
+                latitude, longitude, exception.getMessage());
+        return LocationContext.unknown();
     }
 
     /**

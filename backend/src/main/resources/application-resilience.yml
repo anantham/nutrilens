@@ -1,0 +1,162 @@
+# Resilience4j Configuration for Error Handling & Observability
+# Purpose: Configure retry, circuit breaker, and rate limiter for external API calls
+
+resilience4j:
+  # ============================================================================
+  # Retry Configuration
+  # ============================================================================
+  retry:
+    instances:
+      # OpenAI Vision API retry config
+      openai:
+        maxAttempts: 3
+        waitDuration: 2s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignoreExceptions:
+          - org.springframework.web.client.HttpClientErrorException.Unauthorized
+          - org.springframework.web.client.HttpClientErrorException.Forbidden
+          - com.nutritheous.common.exception.AnalyzerException
+
+      # Google Maps API retry config (more conservative due to cost)
+      googlemaps:
+        maxAttempts: 2
+        waitDuration: 1s
+        enableExponentialBackoff: false
+        retryExceptions:
+          - java.io.IOException
+          - com.google.maps.errors.ApiException
+        ignoreExceptions:
+          - com.google.maps.errors.InvalidRequestException
+
+      # Google Cloud Storage retry config
+      gcs:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+
+  # ============================================================================
+  # Circuit Breaker Configuration
+  # ============================================================================
+  circuitbreaker:
+    instances:
+      # Google Maps API circuit breaker (protect against quota exhaustion)
+      googlemaps:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 80
+        slowCallDurationThreshold: 3s
+        recordExceptions:
+          - java.io.IOException
+          - com.google.maps.errors.ApiException
+        ignoreExceptions:
+          - com.google.maps.errors.InvalidRequestException
+
+      # OpenAI API circuit breaker
+      openai:
+        registerHealthIndicator: true
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        permittedNumberOfCallsInHalfOpenState: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 60s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 10s
+
+  # ============================================================================
+  # Rate Limiter Configuration
+  # ============================================================================
+  ratelimiter:
+    instances:
+      # OpenAI API rate limiter (respect API limits)
+      openai:
+        limitForPeriod: 60
+        limitRefreshPeriod: 60s
+        timeoutDuration: 5s
+
+      # Google Maps API rate limiter (cost control)
+      googlemaps:
+        limitForPeriod: 100
+        limitRefreshPeriod: 60s
+        timeoutDuration: 2s
+
+# ============================================================================
+# Spring Cache Configuration (Redis)
+# ============================================================================
+spring:
+  cache:
+    type: redis
+    redis:
+      time-to-live: 86400000 # 24 hours in milliseconds
+    cache-names:
+      - googleMapsGeocode
+      - googleMapsPlaces
+
+  # Redis connection configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+# ============================================================================
+# Actuator Configuration (Health Checks & Metrics)
+# ============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+
+  # Prometheus metrics
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+logging:
+  level:
+    io.github.resilience4j: DEBUG
+    com.nutritheous: INFO
+    org.springframework.cache: DEBUG
+
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

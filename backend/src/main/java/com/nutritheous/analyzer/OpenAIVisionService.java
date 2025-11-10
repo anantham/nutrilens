@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nutritheous.common.dto.AnalysisResponse;
 import com.nutritheous.common.exception.AnalyzerException;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -49,6 +52,11 @@ public class OpenAIVisionService {
     /**
      * Analyzes a food image and returns nutritional information.
      *
+     * <p>Enhanced with Resilience4j for reliability:
+     * - Retry: Up to 3 attempts with exponential backoff (2s, 4s, 8s)
+     * - Circuit Breaker: Opens after 50% failure rate to prevent cascading failures
+     * - Rate Limiter: Max 60 requests per minute
+     *
      * @param imageDataUri Base64 encoded image with data URI prefix (e.g., "data:image/jpeg;base64,...")
      * @param userDescription Optional user-provided description to help with analysis
      * @param locationContext Optional location context from GPS + Google Maps
@@ -56,6 +64,9 @@ public class OpenAIVisionService {
      * @return AnalysisResponse with nutritional information
      * @throws AnalyzerException If analysis fails
      */
+    @Retry(name = "openai", fallbackMethod = "analyzeImageFallback")
+    @CircuitBreaker(name = "openai", fallbackMethod = "analyzeImageFallback")
+    @RateLimiter(name = "openai")
     public AnalysisResponse analyzeImage(
             String imageDataUri,
             String userDescription,
@@ -288,12 +299,20 @@ public class OpenAIVisionService {
     /**
      * Analyzes a text description only (no image) and returns nutritional information.
      *
+     * <p>Enhanced with Resilience4j for reliability:
+     * - Retry: Up to 3 attempts with exponential backoff
+     * - Circuit Breaker: Opens after 50% failure rate
+     * - Rate Limiter: Max 60 requests per minute
+     *
      * @param description User-provided description of the meal
      * @param locationContext Optional location context from GPS + Google Maps
      * @param mealTime Optional meal time for time-based context
      * @return AnalysisResponse with nutritional information
      * @throws AnalyzerException If analysis fails
      */
+    @Retry(name = "openai", fallbackMethod = "analyzeTextOnlyFallback")
+    @CircuitBreaker(name = "openai", fallbackMethod = "analyzeTextOnlyFallback")
+    @RateLimiter(name = "openai")
     public AnalysisResponse analyzeTextOnly(
             String description,
             com.nutritheous.common.dto.LocationContext locationContext,
@@ -675,5 +694,63 @@ public class OpenAIVisionService {
                 typicalMeal,
                 portionGuidance
         );
+    }
+
+    // ============================================================================
+    // Fallback Methods for Resilience4j
+    // ============================================================================
+
+    /**
+     * Fallback method when OpenAI API is unavailable or circuit breaker is open.
+     * Returns a minimal response with estimated values based on description.
+     *
+     * @param imageDataUri Original image data URI
+     * @param userDescription User description
+     * @param locationContext Location context
+     * @param mealTime Meal time
+     * @param exception The exception that triggered the fallback
+     * @return Fallback AnalysisResponse with estimated values
+     */
+    private AnalysisResponse analyzeImageFallback(
+            String imageDataUri,
+            String userDescription,
+            com.nutritheous.common.dto.LocationContext locationContext,
+            java.time.LocalDateTime mealTime,
+            Exception exception
+    ) {
+        log.warn("OpenAI API unavailable, using fallback response. Reason: {}",
+                exception.getMessage());
+
+        // Return a conservative fallback response
+        return AnalysisResponse.builder()
+                .calories(400) // Conservative estimate
+                .proteinG(15.0)
+                .fatG(15.0)
+                .carbohydratesG(45.0)
+                .confidence(0.3) // Low confidence to indicate fallback
+                .description(userDescription != null ? userDescription : "Meal (AI temporarily unavailable)")
+                .build();
+    }
+
+    /**
+     * Fallback method for text-only analysis
+     */
+    private AnalysisResponse analyzeTextOnlyFallback(
+            String description,
+            com.nutritheous.common.dto.LocationContext locationContext,
+            java.time.LocalDateTime mealTime,
+            Exception exception
+    ) {
+        log.warn("OpenAI API unavailable for text analysis, using fallback. Reason: {}",
+                exception.getMessage());
+
+        return AnalysisResponse.builder()
+                .calories(300)
+                .proteinG(10.0)
+                .fatG(10.0)
+                .carbohydratesG(40.0)
+                .confidence(0.2)
+                .description(description != null ? description : "Meal (AI temporarily unavailable)")
+                .build();
     }
 }
