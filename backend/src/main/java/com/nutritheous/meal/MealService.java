@@ -15,9 +15,14 @@ import com.nutritheous.validation.AiValidationService;
 import com.nutritheous.validation.ValidationFailure;
 import com.nutritheous.validation.ValidationFailureRepository;
 import com.nutritheous.validation.ValidationResult;
+import com.nutritheous.common.dto.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -306,6 +311,84 @@ public class MealService {
                 .stream()
                 .map(meal -> MealResponse.fromMeal(meal, storageService))
                 .collect(Collectors.toList());
+    }
+
+    // ==================== Paginated Methods ====================
+
+    /**
+     * Get user meals with pagination (recommended for production).
+     * Returns meals ordered by meal time descending (newest first).
+     *
+     * @param userId User ID
+     * @param page Page number (0-indexed)
+     * @param size Number of items per page
+     * @return PageResponse with meals and pagination metadata
+     */
+    public PageResponse<MealResponse> getUserMealsPaginated(UUID userId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "mealTime"));
+        Page<Meal> mealPage = mealRepository.findByUserId(userId, pageable);
+
+        Page<MealResponse> responsePage = mealPage.map(meal -> MealResponse.fromMeal(meal, storageService));
+
+        return PageResponse.from(responsePage);
+    }
+
+    /**
+     * Get user meals by date range with pagination.
+     *
+     * @param userId User ID
+     * @param startDate Start of date range
+     * @param endDate End of date range
+     * @param page Page number (0-indexed)
+     * @param size Number of items per page
+     * @return PageResponse with meals in date range
+     */
+    public PageResponse<MealResponse> getUserMealsByDateRangePaginated(
+            UUID userId,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            int page,
+            int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "mealTime"));
+        Page<Meal> mealPage = mealRepository.findByUserIdAndMealTimeBetween(userId, startDate, endDate, pageable);
+
+        Page<MealResponse> responsePage = mealPage.map(meal -> MealResponse.fromMeal(meal, storageService));
+
+        return PageResponse.from(responsePage);
+    }
+
+    /**
+     * Get user meals by type with pagination.
+     *
+     * @param userId User ID
+     * @param mealType Meal type filter
+     * @param page Page number (0-indexed)
+     * @param size Number of items per page
+     * @return PageResponse with meals of specified type
+     */
+    public PageResponse<MealResponse> getUserMealsByTypePaginated(
+            UUID userId,
+            Meal.MealType mealType,
+            int page,
+            int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "mealTime"));
+        Page<Meal> mealPage = mealRepository.findByUserIdAndMealType(userId, mealType, pageable);
+
+        Page<MealResponse> responsePage = mealPage.map(meal -> MealResponse.fromMeal(meal, storageService));
+
+        return PageResponse.from(responsePage);
+    }
+
+    /**
+     * Get total count of meals for a user.
+     *
+     * @param userId User ID
+     * @return Total number of meals
+     */
+    public long getUserMealsCount(UUID userId) {
+        return mealRepository.countByUserId(userId);
     }
 
     @Transactional

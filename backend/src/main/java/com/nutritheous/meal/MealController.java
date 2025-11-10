@@ -2,10 +2,12 @@ package com.nutritheous.meal;
 
 import com.nutritheous.auth.User;
 import com.nutritheous.common.dto.MealResponse;
+import com.nutritheous.common.dto.PageResponse;
 import com.nutritheous.meal.dto.MealUpdateRequest;
 import com.nutritheous.security.FileValidationService;
 import com.nutritheous.security.InputSanitizationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -129,6 +131,80 @@ public class MealController {
     ) {
         List<MealResponse> meals = mealService.getUserMealsByType(user.getId(), mealType);
         return ResponseEntity.ok(meals);
+    }
+
+    // ==================== Paginated Endpoints (Recommended for Production) ====================
+
+    @GetMapping("/paginated")
+    @Operation(summary = "Get user meals (paginated)",
+               description = "Retrieve meals with pagination. Recommended for production use to avoid loading all meals at once.")
+    public ResponseEntity<PageResponse<MealResponse>> getUserMealsPaginated(
+            @AuthenticationPrincipal User user,
+            @Parameter(description = "Page number (0-indexed)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Number of items per page", example = "20")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        // Enforce maximum page size to prevent resource exhaustion
+        int effectiveSize = Math.min(size, 100);
+
+        PageResponse<MealResponse> meals = mealService.getUserMealsPaginated(user.getId(), page, effectiveSize);
+
+        log.info("📋 Retrieved page {} (size {}) of meals for user: {}",
+                page, effectiveSize, user.getEmail());
+
+        return ResponseEntity.ok(meals);
+    }
+
+    @GetMapping("/paginated/range")
+    @Operation(summary = "Get meals by date range (paginated)",
+               description = "Retrieve meals within a date range with pagination")
+    public ResponseEntity<PageResponse<MealResponse>> getMealsByDateRangePaginated(
+            @AuthenticationPrincipal User user,
+            @Parameter(description = "Start date (ISO format)", example = "2025-01-01T00:00:00")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @Parameter(description = "End date (ISO format)", example = "2025-12-31T23:59:59")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @Parameter(description = "Page number (0-indexed)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Number of items per page", example = "20")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        int effectiveSize = Math.min(size, 100);
+
+        PageResponse<MealResponse> meals = mealService.getUserMealsByDateRangePaginated(
+                user.getId(), startDate, endDate, page, effectiveSize);
+
+        return ResponseEntity.ok(meals);
+    }
+
+    @GetMapping("/paginated/type/{mealType}")
+    @Operation(summary = "Get meals by type (paginated)",
+               description = "Retrieve meals filtered by type with pagination")
+    public ResponseEntity<PageResponse<MealResponse>> getMealsByTypePaginated(
+            @AuthenticationPrincipal User user,
+            @PathVariable Meal.MealType mealType,
+            @Parameter(description = "Page number (0-indexed)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Number of items per page", example = "20")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        int effectiveSize = Math.min(size, 100);
+
+        PageResponse<MealResponse> meals = mealService.getUserMealsByTypePaginated(
+                user.getId(), mealType, page, effectiveSize);
+
+        return ResponseEntity.ok(meals);
+    }
+
+    @GetMapping("/count")
+    @Operation(summary = "Get total meal count",
+               description = "Get the total number of meals for the authenticated user")
+    public ResponseEntity<Long> getUserMealsCount(
+            @AuthenticationPrincipal User user
+    ) {
+        long count = mealService.getUserMealsCount(user.getId());
+        return ResponseEntity.ok(count);
     }
 
     @PutMapping("/{mealId}")

@@ -1,0 +1,106 @@
+# Performance Optimization Configuration
+# Optimizes database connection pooling, query logging, and caching
+
+spring:
+  # ==================== HikariCP Connection Pool Optimization ====================
+  datasource:
+    hikari:
+      # Connection pool size
+      minimum-idle: 5              # Minimum number of idle connections
+      maximum-pool-size: 20        # Maximum number of connections in pool
+
+      # Connection timeout settings
+      connection-timeout: 30000    # 30 seconds - max wait for connection from pool
+      idle-timeout: 600000         # 10 minutes - max time connection can sit idle
+      max-lifetime: 1800000        # 30 minutes - max lifetime of connection in pool
+
+      # Performance tuning
+      auto-commit: false           # Disable auto-commit for better transaction control
+      connection-test-query: SELECT 1  # Query to test connection validity
+      leak-detection-threshold: 60000  # 60 seconds - detect connection leaks
+
+      # Connection pooling metrics
+      register-mbeans: true        # Enable JMX metrics for monitoring
+      pool-name: NutritheousHikariPool
+
+  # ==================== JPA/Hibernate Performance ====================
+  jpa:
+    properties:
+      hibernate:
+        # Query optimization
+        jdbc:
+          batch_size: 20           # Batch INSERT/UPDATE operations
+          fetch_size: 50           # Number of rows to fetch at once
+
+        # SQL logging (disable in production, enable for debugging)
+        show_sql: false            # Don't log SQL to console (use logging framework instead)
+        format_sql: true           # Format SQL for readability in logs
+
+        # Query plan cache
+        query:
+          plan_cache_max_size: 2048  # Maximum number of query plans to cache
+          plan_parameter_metadata_max_size: 128
+
+        # Statement caching
+        statement:
+          batch_size: 20           # Number of statements to batch
+
+        # Second-level cache (Redis)
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+
+        # Statistics (enable for monitoring, disable in production for performance)
+        generate_statistics: false
+
+# ==================== Logging Configuration ====================
+logging:
+  level:
+    # Application logging
+    com.nutritheous: INFO
+
+    # Hibernate SQL logging (slow query detection)
+    org.hibernate.SQL: DEBUG                          # Log all SQL statements
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # Log SQL parameter values
+    org.hibernate.stat: DEBUG                         # Log statistics
+
+    # HikariCP connection pool logging
+    com.zaxxer.hikari: DEBUG                          # Log pool events
+
+    # Spring Data logging
+    org.springframework.data: DEBUG
+
+    # Transaction logging
+    org.springframework.transaction: DEBUG
+
+# ==================== Actuator Metrics ====================
+management:
+  metrics:
+    enable:
+      hikari: true                # Enable HikariCP metrics
+      jvm: true                   # Enable JVM metrics
+      jdbc: true                  # Enable JDBC metrics
+
+  # Expose metrics endpoint
+  endpoints:
+    web:
+      exposure:
+        include: metrics,health,prometheus,info
+
+# ==================== Performance Thresholds ====================
+# Custom properties for monitoring
+app:
+  performance:
+    # Database query thresholds
+    slow-query-threshold-ms: 1000      # Log queries taking longer than 1 second
+    very-slow-query-threshold-ms: 5000 # Alert on queries taking longer than 5 seconds
+
+    # Connection pool thresholds
+    pool-utilization-warning: 0.80    # Warn when pool is 80% utilized
+    pool-utilization-critical: 0.95   # Critical when pool is 95% utilized
+
+    # Response time thresholds
+    api-response-warning-ms: 500      # Warn on API responses > 500ms
+    api-response-critical-ms: 2000    # Critical on API responses > 2 seconds
