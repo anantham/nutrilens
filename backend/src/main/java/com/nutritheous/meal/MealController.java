@@ -3,6 +3,8 @@ package com.nutritheous.meal;
 import com.nutritheous.auth.User;
 import com.nutritheous.common.dto.MealResponse;
 import com.nutritheous.meal.dto.MealUpdateRequest;
+import com.nutritheous.security.FileValidationService;
+import com.nutritheous.security.InputSanitizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,6 +33,12 @@ public class MealController {
     @Autowired
     private MealService mealService;
 
+    @Autowired
+    private FileValidationService fileValidationService;
+
+    @Autowired
+    private InputSanitizationService inputSanitizationService;
+
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Upload meal", description = "Upload a food image and/or description for nutritional analysis. Either image or description (or both) is required.")
     public ResponseEntity<MealResponse> uploadMeal(
@@ -50,12 +58,25 @@ public class MealController {
         log.info("🍽️  Received meal upload request - User: {}, Type: {}, Has Image: {}, Has Description: {}",
                 user.getEmail(), mealType, image != null && !image.isEmpty(), description != null && !description.isBlank());
 
+        // Validate image file if provided
+        if (image != null && !image.isEmpty()) {
+            fileValidationService.validateImageFile(image);
+            log.debug("✅ Image file validation passed");
+        }
+
+        // Sanitize description if provided
+        String sanitizedDescription = description;
+        if (description != null && !description.isBlank()) {
+            sanitizedDescription = inputSanitizationService.sanitizeMealDescription(description);
+            log.debug("✅ Description sanitized");
+        }
+
         MealResponse response = mealService.uploadMeal(
                 user.getId(),
                 image,
                 mealType,
                 mealTime,
-                description
+                sanitizedDescription
         );
 
         log.info("✅ Meal upload complete - ID: {}, Image URL available: {}",

@@ -5,10 +5,12 @@ import com.nutritheous.common.dto.LoginRequest;
 import com.nutritheous.common.dto.RegisterRequest;
 import com.nutritheous.common.exception.InvalidCredentialsException;
 import com.nutritheous.common.exception.UserAlreadyExistsException;
+import com.nutritheous.security.LoginAttemptService;
 import com.nutritheous.service.CalorieCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,6 +34,9 @@ public class AuthService {
 
     @Autowired
     private CalorieCalculationService calorieCalculationService;
+
+    @Autowired
+    private LoginAttemptService loginAttemptService;
 
     public AuthResponse register(RegisterRequest request) {
         log.info("📝 Registration attempt for email: {}", request.getEmail());
@@ -80,6 +85,17 @@ public class AuthService {
     public AuthResponse login(LoginRequest request) {
         log.info("🔐 Login attempt for email: {}", request.getEmail());
 
+        // Check if account is locked due to failed login attempts
+        if (loginAttemptService.isLocked(request.getEmail())) {
+            long remainingMinutes = loginAttemptService.getRemainingLockoutMinutes(request.getEmail());
+            log.warn("🔒 Login blocked - Account locked for: {}. Time remaining: {} minutes",
+                    request.getEmail(), remainingMinutes);
+            throw new LockedException(
+                    String.format("Account is temporarily locked due to too many failed login attempts. " +
+                            "Please try again in %d minutes.", remainingMinutes)
+            );
+        }
+
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -87,8 +103,18 @@ public class AuthService {
                             request.getPassword()
                     )
             );
+
+            // Login successful - clear any failed attempt history
+            loginAttemptService.loginSucceeded(request.getEmail());
+
         } catch (AuthenticationException e) {
-            log.warn("❌ Login failed - Invalid credentials for: {}", request.getEmail());
+            // Login failed - record the failed attempt
+            loginAttemptService.loginFailed(request.getEmail());
+
+            int attempts = loginAttemptService.getFailedAttempts(request.getEmail());
+            log.warn("❌ Login failed - Invalid credentials for: {}. Failed attempts: {}",
+                    request.getEmail(), attempts);
+
             throw new InvalidCredentialsException("Invalid email or password");
         }
 
