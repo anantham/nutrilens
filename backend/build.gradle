@@ -3,6 +3,7 @@ plugins {
     id 'org.springframework.boot' version '3.2.0'
     id 'io.spring.dependency-management' version '1.1.4'
     id 'org.jsonschema2pojo' version '1.2.1'
+    id 'jacoco'
 }
 
 group = 'com.nutritheous'
@@ -81,7 +82,78 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport // Generate coverage report after tests
 }
+
+// JaCoCo Test Coverage Configuration
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+jacocoTestReport {
+    dependsOn test // Tests must run before generating report
+
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/test/html')
+        xml.outputLocation = layout.buildDirectory.file('reports/jacoco/test/jacocoTestReport.xml')
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                // Exclude generated code
+                '**/generated/**',
+                '**/js2p/**',
+
+                // Exclude configuration classes
+                '**/config/**',
+
+                // Exclude DTOs (simple data classes)
+                '**/dto/**',
+                '**/common/dto/**',
+
+                // Exclude entities (JPA beans)
+                '**/entity/**',
+
+                // Exclude main application class
+                '**/NutritheousApplication.class'
+            ])
+        }))
+    }
+}
+
+// Enforce minimum code coverage
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.70 // 70% coverage target
+            }
+        }
+
+        rule {
+            element = 'CLASS'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.60 // 60% minimum per class
+            }
+            excludes = [
+                '*.config.*',
+                '*.dto.*',
+                '*.entity.*',
+                '*Application'
+            ]
+        }
+    }
+}
+
+// Add coverage check to build process (optional - comment out to allow builds with low coverage)
+// check.dependsOn jacocoTestCoverageVerification
 
 // Custom task to generate OpenAPI/Swagger documentation
 task generateSwaggerDocs {
