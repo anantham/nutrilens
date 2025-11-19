@@ -113,12 +113,34 @@ jobs:
           fi
 
       # ============================================================================
-      # Phase 4: Quality Gates Enforcement
+      # Phase 4: Performance Testing (New in Phase 4)
+      # ============================================================================
+
+      - name: Run Performance Benchmarks
+        id: jmh
+        run: |
+          echo "::group::Performance Benchmarks"
+          ./gradlew jmh || true
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Check Performance Baseline
+        run: |
+          if [ -f "performance-baseline.json" ] && [ -f "build/reports/jmh/results.json" ]; then
+            echo "::notice::Performance baseline found - comparing results"
+            echo "::notice::Review build/reports/jmh/results.json for regressions"
+          else
+            echo "::warning::No performance baseline found"
+            echo "::warning::Create baseline with: ./gradlew jmh && cp build/reports/jmh/results.json performance-baseline.json"
+          fi
+
+      # ============================================================================
+      # Phase 4: Quality Gates Enforcement (Updated threshold: 65% → 70%)
       # ============================================================================
 
       - name: Enforce Mutation Coverage Threshold
         run: |
-          THRESHOLD=65
+          THRESHOLD=70
           ACTUAL=${{ steps.mutation_coverage.outputs.test_strength }}
 
           echo "::notice::Mutation Coverage: $ACTUAL% (Minimum: $THRESHOLD%)"
@@ -127,10 +149,31 @@ jobs:
             echo "::error::❌ Mutation coverage ($ACTUAL%) is below threshold ($THRESHOLD%)"
             echo "::error::This means your tests are not catching enough bugs!"
             echo "::error::Add more specific assertions and property-based tests."
+            echo "::error::Run: ./gradlew pitest && ./scripts/analyze-mutations.sh --verbose"
             exit 1
           else
             echo "::notice::✅ Mutation coverage ($ACTUAL%) meets threshold ($THRESHOLD%)"
           fi
+
+      # ============================================================================
+      # Phase 4: Track Quality Metrics Over Time
+      # ============================================================================
+
+      - name: Track Quality Metrics
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        run: |
+          echo "::group::Quality Metrics Tracking"
+          ./scripts/track-quality-metrics.sh
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Upload Quality Metrics History
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-metrics-history
+          path: backend/quality-metrics-history.csv
+          retention-days: 365  # Keep for 1 year to track long-term trends
 
       # ============================================================================
       # Phase 5: Upload Test Reports
@@ -184,7 +227,7 @@ jobs:
           script: |
             const mutationCoverage = '${{ steps.mutation_coverage.outputs.test_strength }}';
             const lineCoverage = '${{ steps.mutation_coverage.outputs.mutation_coverage }}';
-            const threshold = 65;
+            const threshold = 70;  // Phase 4: Increased from 65% to 70%
 
             const passedMutation = parseInt(mutationCoverage) >= threshold;
             const status = passedMutation ? '✅ PASSED' : '❌ FAILED';
@@ -192,7 +235,7 @@ jobs:
 
             const comment = `## ${emoji} Test Quality Report ${status}
 
-            ### Mutation Testing Results
+            ### Mutation Testing Results (Phase 4)
             | Metric | Value | Status |
             |--------|-------|--------|
             | **Mutation Coverage** | **${mutationCoverage}%** | ${passedMutation ? '✅' : '❌'} ${passedMutation ? 'Meets' : 'Below'} threshold (${threshold}%) |
@@ -208,9 +251,20 @@ jobs:
             **${mutationCoverage}% mutation coverage** means your tests catch ${mutationCoverage}% of introduced bugs.
 
             ${passedMutation ?
-              '### ✅ Great Job!\n\nYour tests are strong and catch most bugs. Keep up the good work!' :
+              '### ✅ Excellent Work!\n\n' +
+              'Your tests meet the Phase 4 standard (70%+) and catch most bugs!\n\n' +
+              '**Continuous Improvement:**\n' +
+              '- Review remaining survived mutations for edge cases\n' +
+              '- Consider adding property-based tests for complex logic\n' +
+              '- Run \`./scripts/analyze-mutations.sh --verbose\` for detailed analysis' :
               '### ⚠️ Action Required\n\n' +
               'Your tests are not catching enough bugs. To improve:\n\n' +
+              '**Quick Fix Steps:**\n' +
+              '1. Run: \`./gradlew pitest\`\n' +
+              '2. Analyze: \`./scripts/analyze-mutations.sh --verbose\`\n' +
+              '3. Open: \`build/reports/pitest/index.html\`\n' +
+              '4. Fix survived mutations (see red highlights)\n\n' +
+              '**Common Improvements:**\n' +
               '1. **Replace vague assertions** with specific ones\n' +
               '   - ❌ \`verify(repo).save(any())\`\n' +
               '   - ✅ \`verify(repo).save(argThat(m -> m.getCalories() == 500))\`\n\n' +
@@ -219,19 +273,20 @@ jobs:
               '3. **Test edge cases** (zero, negative, boundary values)\n\n' +
               '4. **Use independent calculations** in assertions\n' +
               '   - Don\'t mirror the implementation\n\n' +
-              '📚 See \`backend/docs/PHASE_1_IMPLEMENTATION_SUMMARY.md\` for examples'
+              '📚 See \`backend/docs/CI_CD_QUALITY_GATES.md\` for detailed guide'
             }
 
             ### 📊 Detailed Reports
 
             Check the **Artifacts** section for:
             - 🧪 Full test results
-            - 📈 Coverage reports
-            - 🧬 Mutation testing details
+            - 📈 Coverage reports (JaCoCo)
+            - 🧬 Mutation testing details (Pitest)
+            - ⚡ Performance benchmarks (JMH)
 
             ---
 
-            <sub>💡 Tip: Mutation coverage is the **real** measure of test quality. Line coverage only shows what code runs, not whether tests actually verify correctness.</sub>
+            <sub>💡 **Phase 4 Update:** Threshold increased to 70% for higher quality standards. Use the mutation analysis script for guided improvements: \`./scripts/analyze-mutations.sh --verbose\`</sub>
             `;
 
             github.rest.issues.createComment({

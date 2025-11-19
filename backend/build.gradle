@@ -100,6 +100,10 @@ dependencies {
 
     // Property-based testing with jqwik
     testImplementation 'net.jqwik:jqwik:1.8.2'
+
+    // Performance testing with JMH (Java Microbenchmark Harness)
+    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
 }
 
 tasks.named('test') {
@@ -222,9 +226,9 @@ pitest {
     // Use timestamped reports (false for cleaner CI/CD)
     timestampedReports = false
 
-    // Quality gates - Phase 3: Increased from 50% to 65%
-    mutationThreshold = 65  // 65% minimum mutation coverage (Phase 3 target)
-    coverageThreshold = 70  // 70% minimum line coverage
+    // Quality gates - Phase 4: Increased from 65% to 70%
+    mutationThreshold = 70  // 70% minimum mutation coverage (Phase 4 target)
+    coverageThreshold = 75  // 75% minimum line coverage
 
     // Performance tuning
     timeoutConstInMillis = 10000  // 10 seconds max per test
@@ -439,5 +443,80 @@ bootRun {
         println "Loaded environment variables from .env file"
     } else {
         println "No .env file found, using system environment variables"
+    }
+}
+
+// ============================================================================
+// Phase 4: Performance Testing with JMH
+// ============================================================================
+
+// Task to run JMH benchmarks
+task jmh(type: JavaExec) {
+    group = 'verification'
+    description = 'Runs JMH performance benchmarks'
+
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+
+    args = [
+        '-f', '1',           // Number of forks
+        '-wi', '3',          // Warmup iterations
+        '-i', '5',           // Measurement iterations
+        '-r', '1s',          // Run each iteration for 1 second
+        '-w', '1s',          // Warmup time per iteration
+        '-rf', 'json',       // Report format
+        '-rff', "${buildDir}/reports/jmh/results.json"  // Report file
+    ]
+
+    doFirst {
+        file("${buildDir}/reports/jmh").mkdirs()
+    }
+
+    doLast {
+        println "\n" + "=".multiply(80)
+        println "JMH Benchmark Results"
+        println "=".multiply(80)
+        println "Report: ${buildDir}/reports/jmh/results.json"
+        println "=".multiply(80) + "\n"
+    }
+}
+
+// Task to run JMH and compare with baseline
+task jmhBaseline(type: JavaExec) {
+    group = 'verification'
+    description = 'Runs JMH benchmarks and compares with baseline'
+
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+
+    args = [
+        '-f', '1',
+        '-wi', '3',
+        '-i', '5',
+        '-r', '1s',
+        '-w', '1s',
+        '-rf', 'json',
+        '-rff', "${buildDir}/reports/jmh/current.json"
+    ]
+
+    doFirst {
+        file("${buildDir}/reports/jmh").mkdirs()
+    }
+
+    doLast {
+        def currentFile = file("${buildDir}/reports/jmh/current.json")
+        def baselineFile = file("${projectDir}/performance-baseline.json")
+
+        if (baselineFile.exists() && currentFile.exists()) {
+            println "\n" + "=".multiply(80)
+            println "Performance Regression Check"
+            println "=".multiply(80)
+            println "Current:  ${currentFile.absolutePath}"
+            println "Baseline: ${baselineFile.absolutePath}"
+            println "Compare results to detect performance regressions"
+            println "=".multiply(80) + "\n"
+        } else {
+            println "\n⚠️  Baseline not found. Create baseline with: cp ${currentFile} performance-baseline.json"
+        }
     }
 }
