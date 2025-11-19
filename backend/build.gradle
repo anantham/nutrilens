@@ -222,8 +222,8 @@ pitest {
     // Use timestamped reports (false for cleaner CI/CD)
     timestampedReports = false
 
-    // Quality gates - start low, increase gradually
-    mutationThreshold = 50  // 50% minimum mutation coverage
+    // Quality gates - Phase 3: Increased from 50% to 65%
+    mutationThreshold = 65  // 65% minimum mutation coverage (Phase 3 target)
     coverageThreshold = 70  // 70% minimum line coverage
 
     // Performance tuning
