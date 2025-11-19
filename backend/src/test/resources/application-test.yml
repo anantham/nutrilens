@@ -1,0 +1,56 @@
+# Test Configuration for Integration Tests
+# Uses H2 in-memory database to avoid external dependencies
+
+spring:
+  # H2 In-Memory Database Configuration
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # Recreate schema for each test run
+    show-sql: false  # Set to true for debugging
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+
+  # Disable Flyway for tests (use ddl-auto instead)
+  flyway:
+    enabled: false
+
+  # Mock External Services
+  # (Actual mocking done with @MockBean in test classes)
+
+# Logging Configuration for Tests
+logging:
+  level:
+    com.nutritheous: INFO  # Change to DEBUG for detailed test logs
+    org.springframework.web: WARN
+    org.hibernate: WARN
+
+# OpenAI Configuration (will be mocked in tests)
+openai:
+  api-key: test-key-not-used
+  model: gpt-4-vision-preview
+  max-tokens: 500
+
+# Google Cloud Storage Configuration (will be mocked in tests)
+gcp:
+  storage:
+    bucket-name: test-bucket
+    project-id: test-project
+
+# Security Configuration for Tests
+jwt:
+  secret: test-secret-key-for-jwt-signing-must-be-at-least-256-bits-long
+  expiration: 3600000  # 1 hour
+
+# Test-Specific Settings
+test:
+  mock-external-services: true
+  use-in-memory-database: true
