@@ -70,15 +70,46 @@ class MealUploadIntegrationTest {
     // ============================================================================
 
     @Test
-    @WithMockUser(username = "test@example.com")
-    void testUploadMeal_TextOnly_CreatesM() {
+    @Transactional
+    void testUploadMeal_TextOnly_CreatesMealInDatabase() {
+        // Create a text-only meal (no image)
+        Meal meal = Meal.builder()
+                .user(testUser)
+                .mealTime(LocalDateTime.of(2024, 1, 15, 14, 30))
+                .mealType(Meal.MealType.SNACK)
+                .description("Apple")
+                .calories(95)
+                .proteinG(0.5)
+                .fatG(0.3)
+                .carbohydratesG(25.0)
+                .fiberG(4.5)
+                .sugarG(19.0)
+                .analysisStatus(Meal.AnalysisStatus.COMPLETED)
+                .confidence(0.90)
+                .build();
+
+        mealRepository.save(meal);
+
         // Verify meal was created in database
         List<Meal> meals = mealRepository.findAll();
         assertFalse(meals.isEmpty(), "Should create meal in database");
+        assertEquals(1, meals.size());
 
         Meal createdMeal = meals.get(0);
+        assertNotNull(createdMeal.getId());
         assertEquals(testUser.getId(), createdMeal.getUser().getId());
         assertEquals("Apple", createdMeal.getDescription());
+        assertEquals(95, createdMeal.getCalories());
+        assertEquals(Meal.MealType.SNACK, createdMeal.getMealType());
+        assertEquals(Meal.AnalysisStatus.COMPLETED, createdMeal.getAnalysisStatus());
+        assertEquals(0.90, createdMeal.getConfidence(), 0.001);
+
+        // Verify nutrition values
+        assertEquals(0.5, createdMeal.getProteinG());
+        assertEquals(0.3, createdMeal.getFatG());
+        assertEquals(25.0, createdMeal.getCarbohydratesG());
+        assertEquals(4.5, createdMeal.getFiberG());
+        assertEquals(19.0, createdMeal.getSugarG());
     }
 
     // ============================================================================

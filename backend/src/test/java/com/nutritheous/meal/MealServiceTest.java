@@ -124,14 +124,23 @@ class MealServiceTest {
 
     @Test
     void testUploadMeal_ValidUser_ProceedsWithUpload() {
+        LocalDateTime uploadTime = LocalDateTime.of(2024, 1, 15, 12, 30);
+
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
         when(photoMetadataService.extractMetadata(any())).thenReturn(PhotoMetadata.empty());
         when(storageService.uploadFile(any(), any())).thenReturn("test-object-123");
         when(storageService.getPresignedUrl(any())).thenReturn("https://storage.test/image");
-        when(mealRepository.save(any())).thenReturn(testMeal);
+        when(mealRepository.save(any())).thenAnswer(invocation -> {
+            Meal saved = invocation.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
 
         AnalysisResponse mockAnalysis = AnalysisResponse.builder()
                 .calories(500)
+                .proteinG(30.0)
+                .fatG(20.0)
+                .carbohydratesG(45.0)
                 .confidence(0.85)
                 .build();
         when(analyzerService.analyzeImage(any(), any(), any(), any())).thenReturn(mockAnalysis);
@@ -140,12 +149,41 @@ class MealServiceTest {
                 .issues(new ArrayList<>())
                 .build());
 
-        assertDoesNotThrow(() ->
-                mealService.uploadMeal(testUserId, testImage, Meal.MealType.LUNCH,
-                        LocalDateTime.now(), "Test meal"));
+        // Execute the upload
+        MealResponse response = mealService.uploadMeal(testUserId, testImage, Meal.MealType.LUNCH,
+                uploadTime, "Test meal");
 
+        // Verify response contains expected values
+        assertNotNull(response);
+        assertNotNull(response.getId());
+        assertEquals(testUserId, response.getUserId());
+        assertEquals(Meal.MealType.LUNCH, response.getMealType());
+        assertEquals("Test meal", response.getDescription());
+        assertEquals(500, response.getCalories());
+        assertEquals(30.0, response.getProteinG());
+        assertEquals(uploadTime, response.getMealTime());
+
+        // Verify interactions with specific values
         verify(userRepository).findById(testUserId);
-        verify(storageService).uploadFile(any(), eq(testUserId));
+        verify(storageService).uploadFile(
+                argThat(file -> file.getOriginalFilename().equals("test.jpg")),
+                eq(testUserId)
+        );
+        verify(storageService).getPresignedUrl("test-object-123");
+        verify(analyzerService).analyzeImage(
+                eq("https://storage.test/image"),
+                eq("Test meal"),
+                any(), // LocationContext can vary
+                any()  // PhotoMetadata can vary
+        );
+
+        // Verify meal was saved with correct values
+        verify(mealRepository, atLeast(2)).save(argThat(meal ->
+                meal.getMealType() == Meal.MealType.LUNCH &&
+                meal.getDescription().equals("Test meal") &&
+                meal.getUser().getId().equals(testUserId) &&
+                meal.getCalories() != null
+        ));
     }
 
     // ============================================================================
@@ -454,6 +492,69 @@ class MealServiceTest {
 
         // Should NOT track correction for identical values
         verify(correctionLogRepository, never()).save(any());
+    }
+
+    @Test
+    void testUpdateMeal_CorrectionMath_MatchesExpectedFormula() {
+        // INVARIANT TEST: Verify correction math is calculated correctly
+        // This test uses independent calculation, not mirroring the code
+        testMeal.setCalories(500);
+        testMeal.setProteinG(30.0);
+        testMeal.setConfidence(0.85);
+
+        when(mealRepository.findById(testMeal.getId())).thenReturn(Optional.of(testMeal));
+        when(mealRepository.save(any())).thenReturn(testMeal);
+
+        MealUpdateRequest updateRequest = new MealUpdateRequest();
+        updateRequest.setCalories(650);  // User correction
+        updateRequest.setProteinG(42.0);  // User correction
+
+        mealService.updateMeal(testMeal.getId(), testUserId, updateRequest);
+
+        // INVARIANT: Verify calories correction math
+        verify(correctionLogRepository).save(argThat(log -> {
+            if (!log.getFieldName().equals("calories")) {
+                return false;
+            }
+
+            // Independent calculation of expected values
+            // percent_error = (user - ai) / user * 100
+            // Expected: (650 - 500) / 650 * 100 = 23.08%
+            BigDecimal expectedPercent = BigDecimal.valueOf(150)
+                    .divide(BigDecimal.valueOf(650), 4, BigDecimal.ROUND_HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(2, BigDecimal.ROUND_HALF_UP);
+
+            // absolute_error = |user - ai|
+            // Expected: |650 - 500| = 150
+            BigDecimal expectedAbsolute = BigDecimal.valueOf(150);
+
+            boolean aiValueCorrect = log.getAiValue().compareTo(BigDecimal.valueOf(500)) == 0;
+            boolean userValueCorrect = log.getUserValue().compareTo(BigDecimal.valueOf(650)) == 0;
+            boolean percentErrorCorrect = log.getPercentError().setScale(2, BigDecimal.ROUND_HALF_UP)
+                    .compareTo(expectedPercent) == 0;
+            boolean absoluteErrorCorrect = log.getAbsoluteError().compareTo(expectedAbsolute) == 0;
+
+            return aiValueCorrect && userValueCorrect && percentErrorCorrect && absoluteErrorCorrect;
+        }));
+
+        // INVARIANT: Verify protein correction math
+        verify(correctionLogRepository).save(argThat(log -> {
+            if (!log.getFieldName().equals("protein_g")) {
+                return false;
+            }
+
+            // Independent calculation: (42 - 30) / 42 * 100 = 28.57%
+            BigDecimal expectedPercent = BigDecimal.valueOf(12)
+                    .divide(BigDecimal.valueOf(42), 4, BigDecimal.ROUND_HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(2, BigDecimal.ROUND_HALF_UP);
+
+            return log.getAiValue().compareTo(BigDecimal.valueOf(30)) == 0 &&
+                   log.getUserValue().compareTo(BigDecimal.valueOf(42)) == 0 &&
+                   log.getPercentError().setScale(2, BigDecimal.ROUND_HALF_UP)
+                           .compareTo(expectedPercent) == 0;
+        }));
     }
 
     // ============================================================================

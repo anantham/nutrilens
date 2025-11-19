@@ -4,6 +4,7 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.4'
     id 'org.jsonschema2pojo' version '1.2.1'
     id 'jacoco'
+    id 'info.solidsoft.pitest' version '1.15.0'
 }
 
 group = 'com.nutritheous'
@@ -173,7 +174,105 @@ jacocoTestCoverageVerification {
 // Add coverage check to build process (optional - comment out to allow builds with low coverage)
 // check.dependsOn jacocoTestCoverageVerification
 
-// Custom task to generate OpenAPI/Swagger documentation
+// ============================================================================
+// Pitest Mutation Testing Configuration
+// ============================================================================
+pitest {
+    // Target classes to mutate
+    targetClasses = ['com.nutritheous.*']
+
+    // Test classes to use
+    targetTests = ['com.nutritheous.*']
+
+    // Exclude classes from mutation testing
+    excludedClasses = [
+        'com.nutritheous.config.*',              // Configuration classes
+        'com.nutritheous.*.dto.*',               // DTOs (data classes)
+        'com.nutritheous.common.dto.*',          // Common DTOs
+        'com.nutritheous.*.entity.*',            // JPA entities
+        'com.nutritheous.*Application',          // Main application class
+        'com.nutritheous.generated.*',           // Generated code
+        'com.nutritheous.js2p.*'                 // JSON schema generated code
+    ]
+
+    // Mutation operators to use
+    // STRONGER includes more aggressive mutations than DEFAULTS
+    mutators = ['STRONGER']
+
+    // Alternative: Use specific mutators for more control
+    // mutators = [
+    //     'CONDITIONALS_BOUNDARY',  // Change < to <=, > to >=, etc.
+    //     'INCREMENTS',             // Change ++ to --, += to -=
+    //     'INVERT_NEGS',            // Change - to +, + to -
+    //     'MATH',                   // Change + to -, * to /, etc.
+    //     'NEGATE_CONDITIONALS',    // Change == to !=, < to >=, etc.
+    //     'RETURN_VALS',            // Change return values
+    //     'VOID_METHOD_CALLS'       // Remove method calls
+    // ]
+
+    // Number of threads for parallel execution
+    threads = 4
+
+    // Output formats
+    outputFormats = ['HTML', 'XML']
+
+    // Use timestamped reports (false for cleaner CI/CD)
+    timestampedReports = false
+
+    // Quality gates - start low, increase gradually
+    mutationThreshold = 50  // 50% minimum mutation coverage
+    coverageThreshold = 70  // 70% minimum line coverage
+
+    // Performance tuning
+    timeoutConstInMillis = 10000  // 10 seconds max per test
+    timeoutFactor = 1.5           // 150% of normal execution time
+
+    // Reporting
+    verbose = true
+
+    // JUnit 5 support
+    junit5PluginVersion = '1.2.0'
+
+    // Feature toggles
+    features = [
+        '+FSTATINIT',   // Faster static initializer handling
+        '+auto_threads' // Automatically determine thread count
+    ]
+
+    // Avoid mutations in certain methods (e.g., toString, hashCode, equals)
+    avoidCallsTo = [
+        'java.util.logging',
+        'org.apache.log4j',
+        'org.slf4j',
+        'java.lang.System.out',
+        'java.lang.System.err'
+    ]
+}
+
+// Optional: Add pitest to check task (disabled by default to avoid slowing down builds)
+// Uncomment when ready to enforce mutation coverage in CI/CD
+// check.dependsOn 'pitest'
+
+// Custom task to run pitest and open report in browser
+task pitestWithReport {
+    group = 'verification'
+    description = 'Runs mutation tests and opens HTML report'
+    dependsOn 'pitest'
+
+    doLast {
+        def reportFile = file("${buildDir}/reports/pitest/index.html")
+        if (reportFile.exists()) {
+            println "\n" + "=".multiply(80)
+            println "Pitest Report Generated!"
+            println "=".multiply(80)
+            println "Report location: ${reportFile.absolutePath}"
+            println "\nTo view report, open: file://${reportFile.absolutePath}"
+            println "=".multiply(80) + "\n"
+        }
+    }
+}
+
+// Custom task to generate Pitest report
 task generateSwaggerDocs {
     group = 'documentation'
     description = 'Generates swagger.json from running Spring Boot application'
