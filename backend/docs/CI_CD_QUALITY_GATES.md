@@ -1,7 +1,7 @@
 # CI/CD Test Quality Gates
 
 **Last Updated:** 2024-11-19
-**Phase:** 3 - Automated Quality Enforcement
+**Phase:** 4 - Continuous Improvement & Excellence
 
 ---
 
@@ -73,7 +73,7 @@ If quality insufficient → BLOCKED ❌
 
 ### 2. Code Coverage (Intermediate Gate)
 
-**Requirement:** Minimum 70% line coverage
+**Requirement:** Minimum 75% line coverage (Phase 4: increased from 70%)
 
 **Enforced by:** JaCoCo plugin + GitHub Actions
 
@@ -102,7 +102,7 @@ open build/reports/jacoco/test/html/index.html
 
 ### 3. Mutation Coverage (Advanced Gate) ⭐
 
-**Requirement:** Minimum 65% mutation coverage
+**Requirement:** Minimum 70% mutation coverage (Phase 4: increased from 65%)
 
 **Enforced by:** Pitest plugin + GitHub Actions
 
@@ -140,12 +140,12 @@ open build/reports/jacoco/test/html/index.html
 open build/reports/pitest/index.html
 ```
 
-**Status:** ✅ Enforced in Phase 3 (current)
+**Status:** ✅ Enforced in Phase 4 (current)
 
 **Threshold History:**
 - Phase 1: 50% (baseline)
-- Phase 3: **65%** (current)
-- Phase 4 Goal: 70%+
+- Phase 3: 65% (automated enforcement)
+- **Phase 4: 70%** (current - excellence standard)
 
 ---
 
@@ -166,12 +166,14 @@ open build/reports/pitest/index.html
 4. ✅ Run property-based tests
 5. ✅ Run integration tests
 6. ✅ Generate JaCoCo coverage report
-7. ✅ Verify code coverage threshold (70%)
+7. ✅ Verify code coverage threshold (75%)
 8. ✅ Run mutation tests with Pitest
-9. ✅ Verify mutation coverage threshold (65%)
-10. ✅ Upload test reports as artifacts
-11. ✅ Post test quality metrics as PR comment
-12. ❌ **FAIL PR** if any quality gate fails
+9. ✅ Verify mutation coverage threshold (70%)
+10. ✅ Run performance benchmarks (JMH)
+11. ✅ Track quality metrics over time
+12. ✅ Upload test reports as artifacts
+13. ✅ Post test quality metrics as PR comment
+14. ❌ **FAIL PR** if any quality gate fails
 
 #### Job 2: `regression-check`
 
@@ -242,11 +244,11 @@ open build/reports/jacoco/test/html/index.html
 ================================================================
 - Statistics
 ================================================================
->> Generated 150 mutations Killed 98 (65%)
+>> Generated 150 mutations Killed 105 (70%)
 >> Ran 250 tests (1.67 tests per mutation)
 ```
 
-**Target:** ≥ 65% killed ✅
+**Target:** ≥ 70% killed ✅
 
 ### Step 5: Review Survived Mutations
 
@@ -304,7 +306,12 @@ logger.info("Processing meal ID: ");  // Removed concatenation
 
 ### Step 6: Improve Test Quality
 
-If mutation coverage < 65%, improve tests:
+If mutation coverage < 70%, improve tests:
+
+**Pro Tip:** Use the Phase 4 mutation analysis tool for guided suggestions:
+```bash
+./scripts/analyze-mutations.sh --verbose
+```
 
 #### Strategy 1: Replace Vague Assertions
 ```java
@@ -381,11 +388,11 @@ void testCalorieCalculation() {
 
 ### Step 7: Push to PR
 
-Once mutation coverage ≥ 65%:
+Once mutation coverage ≥ 70%:
 
 ```bash
 git add .
-git commit -m "Add feature X with comprehensive tests (65% mutation coverage)"
+git commit -m "Add feature X with comprehensive tests (72% mutation coverage)"
 git push origin feature/my-feature
 ```
 
@@ -434,16 +441,17 @@ git push origin feature/my-feature
 
 **Symptoms:**
 ```
-❌ Mutation coverage (58%) is below threshold (65%)
+❌ Mutation coverage (58%) is below threshold (70%)
 ```
 
 **Fix:**
 1. Run `./gradlew pitest` locally
-2. Open `build/reports/pitest/index.html`
-3. Find classes with many survived mutations
-4. Add tests to kill critical mutations
-5. Re-run `./gradlew pitest` to verify
-6. Push changes
+2. **Use the mutation analyzer:** `./scripts/analyze-mutations.sh --verbose`
+3. Open `build/reports/pitest/index.html`
+4. Find classes with many survived mutations
+5. Add tests to kill critical mutations (follow analyzer suggestions)
+6. Re-run `./gradlew pitest` to verify
+7. Push changes
 
 ### Scenario 3: Code Coverage OK, Mutation Coverage Low
 
@@ -537,12 +545,18 @@ open build/reports/jacoco/test/html/index.html
 # 4. Run mutation tests
 ./gradlew pitest
 
-# 5. Review and improve
+# 5. Analyze mutations (Phase 4 tool)
+./scripts/analyze-mutations.sh --verbose
+
+# 6. Review and improve
 open build/reports/pitest/index.html
 
-# 6. Commit when mutation coverage ≥ 65%
+# 7. Run benchmarks (for critical paths)
+./gradlew jmh
+
+# 8. Commit when mutation coverage ≥ 70%
 git add .
-git commit -m "Feature X with 68% mutation coverage"
+git commit -m "Feature X with 72% mutation coverage"
 git push
 ```
 
@@ -660,17 +674,19 @@ pitest {
 - ✅ Real HTTP integration tests
 - ✅ Expected mutation coverage: 60-70%
 
-### Phase 3 (Current)
+### Phase 3 (Completed)
 - ✅ CI/CD quality gates
-- ✅ Mutation threshold: **65%**
+- ✅ Mutation threshold: 65%
 - ✅ PR blocking on quality regression
 - ✅ Automated test quality reporting
 
-### Phase 4 (Future)
-- ⏳ Mutation threshold: 70%+
-- ⏳ Performance testing gates
-- ⏳ Automated test generation suggestions
-- ⏳ Continuous improvement tracking
+### Phase 4 (Current)
+- ✅ Mutation threshold: **70%**
+- ✅ Line coverage threshold: **75%**
+- ✅ Performance testing with JMH
+- ✅ Mutation analysis tool with guided suggestions
+- ✅ Quality metrics tracking over time (365-day retention)
+- ✅ Continuous improvement framework
 
 ---
 

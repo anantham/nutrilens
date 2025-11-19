@@ -14,7 +14,7 @@
 ## Test Quality Checklist
 
 <!-- ⚠️ IMPORTANT: Test quality is enforced by CI/CD -->
-<!-- The PR will be blocked if mutation coverage falls below 65% -->
+<!-- The PR will be blocked if mutation coverage falls below 70% (Phase 4 standard) -->
 
 ### Tests Added/Updated
 - [ ] I have added/updated tests to cover my changes
@@ -39,13 +39,17 @@
   - ❌ `verify(repo).save(any())`
   - ✅ `assertEquals(1, repo.findAll().size())`
 
-### Mutation Testing
+### Mutation Testing (Phase 4 - Excellence Standard)
 - [ ] I have run mutation tests locally: `./gradlew pitest`
-- [ ] Mutation coverage meets or exceeds 65% threshold
+- [ ] Mutation coverage meets or exceeds **70% threshold**
+- [ ] I have analyzed mutations using: `./scripts/analyze-mutations.sh --verbose`
 - [ ] I have reviewed survived mutations and understand why they survived
 - [ ] I have added tests to kill critical survived mutations
+- [ ] I have run performance benchmarks (if applicable): `./gradlew jmh`
 
 **Current Mutation Coverage:** __%  <!-- Run ./gradlew pitest to get this -->
+
+**Pro Tip:** Use `./scripts/analyze-mutations.sh --verbose` for guided suggestions on improving test quality!
 
 ## How to Test
 
@@ -115,7 +119,8 @@ When reviewing, please check:
 3. **Edge Cases**: Are boundary conditions tested?
 4. **Property Tests**: Are mathematical invariants tested with property-based tests?
 5. **Integration Tests**: Do new endpoints have full HTTP → DB integration tests?
-6. **Mutation Coverage**: Check CI report - is mutation coverage ≥ 65%?
+6. **Mutation Coverage**: Check CI report - is mutation coverage ≥ **70%**? (Phase 4 standard)
+7. **Performance**: Have performance benchmarks been run for critical paths?
 
 ### Helpful Commands
 
