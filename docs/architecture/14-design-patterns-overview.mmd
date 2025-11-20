@@ -1,0 +1,884 @@
+```mermaid
+graph TB
+    subgraph RepositoryPattern["🗄️ Repository Pattern"]
+        Entity[Meal Entity<br/>JPA @Entity]
+        Repo[MealRepository<br/>extends JpaRepository]
+        Service[MealService<br/>Business Logic]
+
+        Service -->|Uses| Repo
+        Repo -->|Persists| Entity
+    end
+
+    subgraph ServiceLayer["🎯 Service Layer Pattern"]
+        Controller[MealController<br/>@RestController]
+        BusinessService[MealService<br/>@Service]
+        DataRepo[Repository]
+
+        Controller -->|Delegates to| BusinessService
+        BusinessService -->|Uses| DataRepo
+    end
+
+    subgraph DTOPattern["📦 DTO Pattern"]
+        ClientRequest[Client]
+        RequestDTO[MealUploadRequest<br/>Input DTO]
+        DomainEntity[Meal Entity]
+        ResponseDTO[MealResponse<br/>Output DTO]
+        ClientResponse[Client]
+
+        ClientRequest -->|Sends| RequestDTO
+        RequestDTO -->|Maps to| DomainEntity
+        DomainEntity -->|Maps to| ResponseDTO
+        ResponseDTO -->|Returns to| ClientResponse
+    end
+
+    subgraph StrategyPattern["🎲 Strategy Pattern"]
+        Context[AnalyzerService<br/>Context]
+        Strategy[AnalyzerStrategy<br/>Interface]
+        OpenAIImpl[OpenAIVisionService<br/>Implementation]
+        OpenRouterImpl[OpenRouterService<br/>Alternative]
+
+        Context -->|Uses| Strategy
+        Strategy <|-- OpenAIImpl
+        Strategy <|-- OpenRouterImpl
+    end
+
+    subgraph FactoryPattern["🏭 Factory Pattern"]
+        Factory[StorageServiceFactory]
+        StorageInterface[StorageService<br/>Interface]
+        GCSImpl[GoogleCloudStorageService]
+        LocalImpl[LocalStorageService<br/>For Testing]
+
+        Factory -->|Creates| StorageInterface
+        StorageInterface <|-- GCSImpl
+        StorageInterface <|-- LocalImpl
+    end
+
+    subgraph BuilderPattern["🔨 Builder Pattern"]
+        ComplexObj[Complex Object<br/>e.g., Meal]
+        BuilderClass[Meal.builder]
+
+        BuilderClass -->|Builds| ComplexObj
+
+        BuilderExample["Example:<br/>Meal.builder()<br/>.calories(850)<br/>.protein(45)<br/>.carbs(95)<br/>.build()"]
+    end
+
+    subgraph DependencyInjection["💉 Dependency Injection"]
+        SpringContainer[Spring IoC Container]
+        Bean1[@Service MealService]
+        Bean2[@Repository MealRepository]
+        Bean3[@Component Analyzer]
+
+        SpringContainer -->|Injects| Bean1
+        SpringContainer -->|Injects| Bean2
+        SpringContainer -->|Injects| Bean3
+
+        Bean1 -.->|Depends on| Bean2
+        Bean1 -.->|Depends on| Bean3
+    end
+
+    subgraph DecoratorPattern["🎨 Decorator Pattern"]
+        BaseService[MealService<br/>Base]
+        RateLimitDecorator[RateLimitingInterceptor<br/>Decorator]
+        LoggingDecorator[LoggingAspect<br/>Decorator]
+        CachingDecorator[CachingInterceptor<br/>Decorator]
+
+        RateLimitDecorator -->|Wraps| BaseService
+        LoggingDecorator -->|Wraps| RateLimitDecorator
+        CachingDecorator -->|Wraps| LoggingDecorator
+    end
+
+    subgraph TemplateMethod["📋 Template Method Pattern"]
+        AbstractService[AbstractHealthIndicator<br/>Template]
+        ConcreteHealth1[PostgreSQLHealthIndicator]
+        ConcreteHealth2[OpenAIHealthIndicator]
+
+        AbstractService -->|Defines algorithm| TemplateSteps["1. checkConnection()<br/>2. checkResponse()<br/>3. buildHealth()"]
+        ConcreteHealth1 -->|Implements steps| AbstractService
+        ConcreteHealth2 -->|Implements steps| AbstractService
+    end
+
+    subgraph ObserverPattern["👁️ Observer Pattern (Planned)"]
+        Subject[MealService<br/>Subject]
+        Observer1[StatisticsObserver<br/>Updates stats]
+        Observer2[NotificationObserver<br/>Sends alerts]
+
+        Subject -.->|Notifies| Observer1
+        Subject -.->|Notifies| Observer2
+    end
+
+    %% Styling
+    classDef patternStyle fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    classDef implStyle fill:#50C878,stroke:#2E7D4E,color:#fff
+    classDef interfaceStyle fill:#FF9500,stroke:#CC7700,color:#fff
+
+    class Entity,Repo,Service,BusinessService,Controller,DataRepo patternStyle
+    class RequestDTO,ResponseDTO,DomainEntity implStyle
+    class Strategy,StorageInterface interfaceStyle
+```
+
+# Design Patterns Overview
+
+## Purpose
+Catalog of design patterns used throughout NutriLens codebase. This helps developers understand architectural decisions and maintain consistency.
+
+---
+
+## 1. Repository Pattern 🗄️
+
+**Intent:** Separate data access logic from business logic
+
+**Structure:**
+```
+Service Layer → Repository Interface → JPA Repository → Database
+```
+
+**Implementation:**
+```java
+// Entity
+@Entity
+@Table(name = "meals")
+public class Meal {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    private Double calories;
+    private Double protein;
+    // ... fields
+}
+
+// Repository Interface
+public interface MealRepository extends JpaRepository<Meal, UUID> {
+    List<Meal> findByUserIdAndCreatedAtBetween(
+        UUID userId, Instant start, Instant end
+    );
+
+    @Query("SELECT m FROM Meal m WHERE m.userId = :userId " +
+           "AND m.locationIsRestaurant = true")
+    List<Meal> findRestaurantMeals(@Param("userId") UUID userId);
+}
+
+// Service using Repository
+@Service
+public class MealService {
+    private final MealRepository mealRepository;
+
+    public Meal saveMeal(Meal meal) {
+        return mealRepository.save(meal);
+    }
+
+    public List<Meal> getMealsInDateRange(UUID userId, Instant start, Instant end) {
+        return mealRepository.findByUserIdAndCreatedAtBetween(userId, start, end);
+    }
+}
+```
+
+**Benefits:**
+- Centralized data access logic
+- Easy to mock for testing
+- Database technology can be swapped
+- Query optimization in one place
+
+**Used In:**
+- `MealRepository`
+- `UserRepository`
+- `AiCorrectionLogRepository`
+- `IngredientRepository`
+
+---
+
+## 2. Service Layer Pattern 🎯
+
+**Intent:** Encapsulate business logic separate from controllers and repositories
+
+**Structure:**
+```
+Controller (HTTP) → Service (Business Logic) → Repository (Data Access) → Database
+```
+
+**Implementation:**
+```java
+// Controller - handles HTTP requests
+@RestController
+@RequestMapping("/api/meals")
+public class MealController {
+    private final MealService mealService;
+
+    @PostMapping
+    public ResponseEntity<MealResponse> uploadMeal(
+        @RequestBody MealUploadRequest request,
+        @AuthenticationPrincipal User user
+    ) {
+        // Delegate to service
+        Meal meal = mealService.uploadMeal(request, user);
+        return ResponseEntity.ok(toResponse(meal));
+    }
+}
+
+// Service - contains business logic
+@Service
+@Transactional
+public class MealService {
+    private final MealRepository mealRepository;
+    private final AnalyzerService analyzerService;
+    private final StorageService storageService;
+
+    public Meal uploadMeal(MealUploadRequest request, User user) {
+        // 1. Upload image to cloud storage
+        String imageUrl = storageService.uploadImage(request.getPhoto());
+
+        // 2. Analyze with AI
+        AnalysisResponse analysis = analyzerService.analyze(
+            imageUrl, request.getDescription()
+        );
+
+        // 3. Create and save meal entity
+        Meal meal = Meal.builder()
+            .userId(user.getId())
+            .imageUrl(imageUrl)
+            .calories(analysis.getCalories())
+            // ... map all fields
+            .build();
+
+        return mealRepository.save(meal);
+    }
+}
+```
+
+**Benefits:**
+- Business logic reusable across controllers
+- Easier to test (mock dependencies)
+- Transaction boundaries clearly defined
+- Single responsibility principle
+
+**Used In:**
+- `MealService`
+- `AuthService`
+- `AnalyzerService`
+- `StatisticsService`
+- `LocationContextService`
+
+---
+
+## 3. DTO Pattern (Data Transfer Object) 📦
+
+**Intent:** Transfer data between layers without exposing internal domain model
+
+**Structure:**
+```
+Client → RequestDTO → Service → Entity → Service → ResponseDTO → Client
+```
+
+**Implementation:**
+```java
+// Request DTO - from client
+public class MealUploadRequest {
+    @NotNull
+    private MultipartFile photo;
+
+    @Size(max = 500)
+    private String description;
+
+    // No business logic, just data
+}
+
+// Domain Entity - internal model
+@Entity
+public class Meal {
+    private UUID id;
+    private UUID userId;
+    private Double calories;
+    private Instant createdAt;
+    // ... many internal fields
+}
+
+// Response DTO - to client
+public class MealResponse {
+    private UUID id;
+    private Double calories;
+    private Double protein;
+    private String locationBadge;
+    // Only fields client needs
+}
+
+// Mapping logic
+private MealResponse toResponse(Meal meal) {
+    return MealResponse.builder()
+        .id(meal.getId())
+        .calories(meal.getCalories())
+        .protein(meal.getProtein())
+        .locationBadge(generateLocationBadge(meal))
+        .build();
+}
+```
+
+**Benefits:**
+- Hide internal implementation details
+- Reduce network payload (only send needed data)
+- Versioning flexibility
+- Validation at API boundary
+
+**Used In:**
+- `MealUploadRequest` / `MealResponse`
+- `LoginRequest` / `AuthResponse`
+- `AnalysisRequest` / `AnalysisResponse`
+- `RegisterRequest`
+
+---
+
+## 4. Strategy Pattern 🎲
+
+**Intent:** Define a family of algorithms, encapsulate each one, and make them interchangeable
+
+**Structure:**
+```java
+// Strategy Interface
+public interface AnalyzerStrategy {
+    AnalysisResponse analyze(String imageUrl, String description);
+}
+
+// Concrete Strategy 1
+@Service
+@ConditionalOnProperty(name = "analyzer.provider", havingValue = "openai")
+public class OpenAIVisionService implements AnalyzerStrategy {
+    @Override
+    public AnalysisResponse analyze(String imageUrl, String description) {
+        // OpenAI GPT-4 Vision implementation
+        ChatCompletionRequest request = buildRequest(imageUrl, description);
+        return openAiClient.createChatCompletion(request);
+    }
+}
+
+// Concrete Strategy 2
+@Service
+@ConditionalOnProperty(name = "analyzer.provider", havingValue = "openrouter")
+public class OpenRouterService implements AnalyzerStrategy {
+    @Override
+    public AnalysisResponse analyze(String imageUrl, String description) {
+        // OpenRouter implementation (alternative provider)
+        return openRouterClient.analyze(imageUrl, description);
+    }
+}
+
+// Context
+@Service
+public class AnalyzerService {
+    private final AnalyzerStrategy strategy;
+
+    // Spring auto-injects correct strategy based on configuration
+    public AnalyzerService(AnalyzerStrategy strategy) {
+        this.strategy = strategy;
+    }
+
+    public AnalysisResponse analyze(String imageUrl, String description) {
+        return strategy.analyze(imageUrl, description);
+    }
+}
+```
+
+**Configuration:**
+```yaml
+# application.yml
+analyzer:
+  provider: openai  # or 'openrouter'
+```
+
+**Benefits:**
+- Easy to switch AI providers
+- Add new providers without modifying existing code
+- Testable (mock strategy)
+
+**Used In:**
+- AI Analyzer (OpenAI vs OpenRouter)
+- Storage Service (GCS vs Local for testing)
+
+---
+
+## 5. Factory Pattern 🏭
+
+**Intent:** Create objects without specifying exact class
+
+**Implementation:**
+```java
+// Product Interface
+public interface StorageService {
+    String uploadImage(byte[] imageData, String filename);
+    byte[] downloadImage(String filename);
+    void deleteImage(String filename);
+}
+
+// Concrete Products
+@Service
+@Profile("production")
+public class GoogleCloudStorageService implements StorageService {
+    @Override
+    public String uploadImage(byte[] imageData, String filename) {
+        // Upload to GCS
+        BlobId blobId = BlobId.of(bucketName, filename);
+        storage.create(BlobInfo.newBuilder(blobId).build(), imageData);
+        return getPublicUrl(filename);
+    }
+}
+
+@Service
+@Profile("test")
+public class LocalStorageService implements StorageService {
+    @Override
+    public String uploadImage(byte[] imageData, String filename) {
+        // Save to local filesystem for testing
+        Path path = Paths.get("/tmp/uploads/" + filename);
+        Files.write(path, imageData);
+        return "file://" + path.toString();
+    }
+}
+
+// Factory (Spring profiles act as factory)
+@Configuration
+public class StorageConfig {
+    @Bean
+    @Profile("production")
+    public StorageService productionStorage() {
+        return new GoogleCloudStorageService();
+    }
+
+    @Bean
+    @Profile("test")
+    public StorageService testStorage() {
+        return new LocalStorageService();
+    }
+}
+```
+
+**Benefits:**
+- Easy environment-specific implementations
+- Testable without cloud dependencies
+- Centralized object creation
+
+**Used In:**
+- Storage Service (GCS vs Local)
+- Health Indicators (different per dependency)
+
+---
+
+## 6. Builder Pattern 🔨
+
+**Intent:** Construct complex objects step by step
+
+**Implementation:**
+```java
+// Using Lombok @Builder
+@Entity
+@Builder
+public class Meal {
+    private UUID id;
+    private UUID userId;
+    private Double calories;
+    private Double protein;
+    // ... 40+ fields
+}
+
+// Usage
+Meal meal = Meal.builder()
+    .userId(user.getId())
+    .imageUrl(imageUrl)
+    .calories(analysis.getCalories())
+    .protein(analysis.getProtein())
+    .carbs(analysis.getCarbs())
+    .fat(analysis.getFat())
+    .fiber(analysis.getFiber())
+    .sugar(analysis.getSugar())
+    .sodium(analysis.getSodium())
+    .novaScore(analysis.getNovaScore())
+    .cookingMethod(analysis.getCookingMethod())
+    // ... 30+ more fields
+    .createdAt(Instant.now())
+    .build();
+```
+
+**Benefits:**
+- Readable object construction
+- Immutable objects (if desired)
+- Optional parameters handled gracefully
+- Avoid telescoping constructors
+
+**Used In:**
+- All entities (`Meal`, `User`, `AiCorrectionLog`)
+- DTOs (`MealResponse`, `AnalysisResponse`)
+- Test fixture creation
+
+---
+
+## 7. Dependency Injection 💉
+
+**Intent:** Provide dependencies from outside rather than creating them internally
+
+**Implementation:**
+```java
+@Service
+public class MealService {
+    // Dependencies declared as final fields
+    private final MealRepository mealRepository;
+    private final AnalyzerService analyzerService;
+    private final StorageService storageService;
+    private final LocationContextService locationService;
+
+    // Constructor injection (preferred)
+    public MealService(
+        MealRepository mealRepository,
+        AnalyzerService analyzerService,
+        StorageService storageService,
+        LocationContextService locationService
+    ) {
+        this.mealRepository = mealRepository;
+        this.analyzerService = analyzerService;
+        this.storageService = storageService;
+        this.locationService = locationService;
+    }
+
+    // Dependencies provided by Spring container
+}
+```
+
+**Testing with DI:**
+```java
+@Test
+void testUploadMeal() {
+    // Mock dependencies
+    MealRepository mockRepo = mock(MealRepository.class);
+    AnalyzerService mockAnalyzer = mock(AnalyzerService.class);
+    StorageService mockStorage = mock(StorageService.class);
+
+    // Inject mocks
+    MealService service = new MealService(
+        mockRepo, mockAnalyzer, mockStorage, null
+    );
+
+    // Test with mocked dependencies
+}
+```
+
+**Benefits:**
+- Loose coupling
+- Easy testing (inject mocks)
+- Configuration centralized
+- Spring manages lifecycle
+
+**Used Throughout:**
+- All `@Service`, `@Controller`, `@Repository` classes
+
+---
+
+## 8. Decorator Pattern 🎨
+
+**Intent:** Add responsibilities to objects dynamically
+
+**Implementation:**
+```java
+// Base component
+@Service
+public class MealService {
+    public Meal saveMeal(Meal meal) {
+        return mealRepository.save(meal);
+    }
+}
+
+// Decorator 1: Rate Limiting
+@Component
+public class RateLimitingInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request,
+                            HttpServletResponse response,
+                            Object handler) {
+        String userId = extractUserId(request);
+
+        if (rateLimitExceeded(userId)) {
+            response.setStatus(429);  // Too Many Requests
+            return false;
+        }
+
+        return true;
+    }
+}
+
+// Decorator 2: Logging (AOP)
+@Aspect
+@Component
+public class LoggingAspect {
+    @Around("@annotation(Loggable)")
+    public Object logExecution(ProceedingJoinPoint joinPoint) throws Throwable {
+        log.info("Executing: {}", joinPoint.getSignature());
+        long start = System.currentTimeMillis();
+
+        Object result = joinPoint.proceed();
+
+        long duration = System.currentTimeMillis() - start;
+        log.info("Completed: {} in {}ms", joinPoint.getSignature(), duration);
+
+        return result;
+    }
+}
+
+// Decorator 3: Caching
+@Service
+public class CachedMealService {
+    @Cacheable(value = "meals", key = "#mealId")
+    public Meal getMeal(UUID mealId) {
+        return mealRepository.findById(mealId);
+    }
+}
+```
+
+**Benefits:**
+- Add cross-cutting concerns without modifying core logic
+- Composable behaviors
+- Single responsibility principle
+
+**Used In:**
+- Rate limiting (interceptor)
+- Logging (AOP aspects)
+- Caching (Spring Cache)
+- Transaction management (Spring `@Transactional`)
+
+---
+
+## 9. Template Method Pattern 📋
+
+**Intent:** Define skeleton of algorithm, let subclasses override specific steps
+
+**Implementation:**
+```java
+// Abstract template
+public abstract class AbstractHealthIndicator implements HealthIndicator {
+
+    @Override
+    public Health health() {
+        try {
+            // Template method defining algorithm
+            if (!checkConnection()) {
+                return Health.down()
+                    .withDetail("error", "Connection failed")
+                    .build();
+            }
+
+            if (!validateResponse()) {
+                return Health.down()
+                    .withDetail("error", "Invalid response")
+                    .build();
+            }
+
+            return buildHealthy();
+
+        } catch (Exception e) {
+            return buildUnhealthy(e);
+        }
+    }
+
+    // Abstract methods - subclasses implement
+    protected abstract boolean checkConnection();
+    protected abstract boolean validateResponse();
+
+    // Concrete methods - shared implementation
+    protected Health buildHealthy() {
+        return Health.up()
+            .withDetail("timestamp", Instant.now())
+            .build();
+    }
+
+    protected Health buildUnhealthy(Exception e) {
+        return Health.down()
+            .withDetail("error", e.getMessage())
+            .withDetail("timestamp", Instant.now())
+            .build();
+    }
+}
+
+// Concrete implementations
+@Component
+public class PostgreSQLHealthIndicator extends AbstractHealthIndicator {
+    @Override
+    protected boolean checkConnection() {
+        return dataSource.getConnection().isValid(5);
+    }
+
+    @Override
+    protected boolean validateResponse() {
+        return jdbcTemplate.queryForObject("SELECT 1", Integer.class) == 1;
+    }
+}
+
+@Component
+public class OpenAIHealthIndicator extends AbstractHealthIndicator {
+    @Override
+    protected boolean checkConnection() {
+        return openAiClient.ping();
+    }
+
+    @Override
+    protected boolean validateResponse() {
+        return openAiClient.getModels().contains("gpt-4-vision-preview");
+    }
+}
+```
+
+**Benefits:**
+- Reuse common algorithm structure
+- Subclasses customize specific steps only
+- Inversion of control
+
+**Used In:**
+- Health indicators
+- Base test classes (arrange-act-assert template)
+
+---
+
+## 10. Observer Pattern 👁️ (Planned)
+
+**Intent:** Notify multiple objects when state changes
+
+**Planned Implementation:**
+```java
+// Subject
+@Service
+public class MealService {
+    private final List<MealEventListener> listeners = new ArrayList<>();
+
+    public void addListener(MealEventListener listener) {
+        listeners.add(listener);
+    }
+
+    public Meal saveMeal(Meal meal) {
+        Meal saved = mealRepository.save(meal);
+
+        // Notify all observers
+        MealCreatedEvent event = new MealCreatedEvent(saved);
+        listeners.forEach(listener -> listener.onMealCreated(event));
+
+        return saved;
+    }
+}
+
+// Observer interface
+public interface MealEventListener {
+    void onMealCreated(MealCreatedEvent event);
+}
+
+// Concrete observers
+@Component
+public class StatisticsObserver implements MealEventListener {
+    @Override
+    public void onMealCreated(MealCreatedEvent event) {
+        // Update statistics cache
+        statisticsService.updateDailyStats(event.getMeal());
+    }
+}
+
+@Component
+public class NotificationObserver implements MealEventListener {
+    @Override
+    public void onMealCreated(MealCreatedEvent event) {
+        // Send notification if daily goal reached
+        if (goalReached(event.getMeal())) {
+            notificationService.sendGoalReachedNotification();
+        }
+    }
+}
+```
+
+**Benefits:**
+- Loose coupling between publisher and subscribers
+- Easy to add new observers
+- Async processing potential
+
+**Future Use Cases:**
+- Real-time statistics updates
+- Notifications
+- Audit logging
+- Analytics events
+
+---
+
+## Pattern Usage Summary
+
+| Pattern | Primary Usage | Benefits |
+|---------|---------------|----------|
+| Repository | Data access | Centralized queries, testability |
+| Service Layer | Business logic | Separation of concerns, reusability |
+| DTO | API contracts | Hide internals, reduce payload |
+| Strategy | Pluggable algorithms | Easy provider switching |
+| Factory | Object creation | Environment-specific implementations |
+| Builder | Complex objects | Readable construction |
+| Dependency Injection | Wiring dependencies | Testability, loose coupling |
+| Decorator | Cross-cutting concerns | Composable behaviors |
+| Template Method | Algorithm reuse | Share structure, customize steps |
+| Observer | Event notification | Loose coupling, extensibility |
+
+---
+
+## Testing Patterns
+
+### Test Fixture Builder
+```java
+public class MealTestBuilder {
+    public static Meal.MealBuilder defaultMeal() {
+        return Meal.builder()
+            .id(UUID.randomUUID())
+            .userId(UUID.randomUUID())
+            .calories(500.0)
+            .protein(25.0)
+            .carbs(50.0)
+            .fat(15.0)
+            .createdAt(Instant.now());
+    }
+
+    public static Meal withHighProtein() {
+        return defaultMeal()
+            .calories(600.0)
+            .protein(60.0)
+            .build();
+    }
+}
+```
+
+### Property-Based Testing (jqwik)
+```java
+@Property
+void fiberCannotExceedCarbs(
+    @ForAll @DoubleRange(min = 0, max = 500) double carbs,
+    @ForAll @DoubleRange(min = 0, max = 500) double fiber
+) {
+    if (fiber > carbs) {
+        assertThrows(ValidationException.class, () ->
+            validator.validate(new AnalysisResponse(fiber, carbs))
+        );
+    }
+}
+```
+
+---
+
+## Anti-Patterns to Avoid
+
+❌ **God Object**: Single class doing too much
+✅ **Instead**: Service Layer with single responsibilities
+
+❌ **Anemic Domain Model**: Entities with only getters/setters
+✅ **Instead**: Rich domain models with behavior
+
+❌ **Hard-coded Dependencies**: `new Service()` inside class
+✅ **Instead**: Dependency Injection
+
+❌ **Magic Numbers**: `if (novaScore > 3)`
+✅ **Instead**: Named constants `if (novaScore > ULTRA_PROCESSED_THRESHOLD)`
+
+❌ **Primitive Obsession**: Using `String` for everything
+✅ **Instead**: Value objects (e.g., `Email`, `UserId`)
+
+---
+
+## Notes
+
+- Patterns chosen for Spring Boot ecosystem
+- Balance between over-engineering and maintainability
+- Property-based testing ensures pattern implementations are correct
+- 70% mutation coverage validates design decisions
+- Patterns documented in code with comments

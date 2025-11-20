@@ -59,6 +59,87 @@ Frontend displays nutrition ← API returns 25+ fields ← Saved to PostgreSQL
 
 You can also just type a description if you don't have a photo ("black coffee", "2 scrambled eggs"), and it'll estimate the nutrition.
 
+## Architecture
+
+**Visual documentation for understanding the system at multiple levels.**
+
+### 📐 Architecture Diagrams
+
+NutriLens architecture is documented through comprehensive Mermaid diagrams organized by abstraction level:
+
+**Level 1: System Overview (High-Level)**
+- **[System Context](docs/architecture/01-system-context.mmd)** - Complete system with external dependencies
+- **[User Journey](docs/architecture/02-user-journey.mmd)** - End-to-end user flows (photo upload, statistics, etc.)
+
+**Level 2: Subsystem Interactions (Mid-Level)**
+- **[Subsystem Overview](docs/architecture/04-subsystem-overview.mmd)** - All subsystems and their relationships
+- **[Meal Upload Flow](docs/architecture/05-meal-upload-flow.mmd)** - Detailed sequence diagram for photo upload
+- **[AI Analysis Pipeline](docs/architecture/06-ai-analysis-pipeline.mmd)** - Complete AI analysis pipeline (6 stages)
+
+**Level 3: Design Patterns**
+- **[Design Patterns Overview](docs/architecture/14-design-patterns-overview.mmd)** - All patterns used (Repository, Service Layer, DTO, Strategy, etc.)
+
+**Complete Roadmap:**
+- **[Architecture Diagrams Roadmap](docs/ARCHITECTURE_DIAGRAMS_ROADMAP.md)** - Full catalog of 20 planned diagrams
+
+### 🎯 Quick Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ User (Mobile/Web)                                          │
+│   ↓                                                         │
+│ REST API (Spring Boot)                                     │
+│   ↓                                                         │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│ │ Auth         │  │ Meal Mgmt    │  │ Statistics   │     │
+│ │ Subsystem    │  │ Subsystem    │  │ Subsystem    │     │
+│ └──────────────┘  └──────────────┘  └──────────────┘     │
+│          ↓                ↓                  ↓             │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│ │ AI Analyzer  │  │ Correction   │  │ Ingredient   │     │
+│ │ (OpenAI)     │  │ Tracking     │  │ Learning     │     │
+│ └──────────────┘  └──────────────┘  └──────────────┘     │
+│          ↓                ↓                  ↓             │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│ │ PostgreSQL   │  │ Redis Cache  │  │ GCS Storage  │     │
+│ └──────────────┘  └──────────────┘  └──────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 🏗️ Key Architectural Patterns
+
+| Pattern | Usage | Example |
+|---------|-------|---------|
+| **Repository** | Data access abstraction | `MealRepository`, `UserRepository` |
+| **Service Layer** | Business logic separation | `MealService`, `AnalyzerService` |
+| **DTO** | API contracts | `MealRequest` → `Meal` → `MealResponse` |
+| **Strategy** | Pluggable AI providers | OpenAI vs OpenRouter |
+| **Dependency Injection** | Loose coupling | Spring IoC container |
+| **Builder** | Complex object creation | `Meal.builder()...build()` |
+
+### 📊 Data Flow
+
+**Photo Upload:**
+```
+Client → MealController → MealService
+                              ↓
+        ┌────────────────────┼────────────────────┐
+        ↓                    ↓                    ↓
+PhotoMetadataService  LocationContextService  AnalyzerService
+        ↓                    ↓                    ↓
+    EXIF GPS          Google Maps           OpenAI Vision
+        ↓                    ↓                    ↓
+        └────────────────────┼────────────────────┘
+                             ↓
+                    MealRepository → PostgreSQL
+```
+
+### 🔍 Where to Start
+
+- **New Developers:** Start with [System Context](docs/architecture/01-system-context.mmd) and [User Journey](docs/architecture/02-user-journey.mmd)
+- **Feature Development:** Review [Subsystem Overview](docs/architecture/04-subsystem-overview.mmd) and [Meal Upload Flow](docs/architecture/05-meal-upload-flow.mmd)
+- **Learning Patterns:** See [Design Patterns Overview](docs/architecture/14-design-patterns-overview.mmd)
+
 ## Quick Start
 
 ### What you need

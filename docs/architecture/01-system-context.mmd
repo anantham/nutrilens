@@ -1,0 +1,130 @@
+```mermaid
+graph TB
+    %% External Actors
+    User[👤 User<br/>Mobile/Web App]
+
+    %% Main System
+    subgraph NutriLens["🍎 NutriLens System"]
+        Backend[Spring Boot Backend<br/>REST API]
+        Database[(PostgreSQL<br/>Meal Data)]
+        Cache[(Redis<br/>Cache)]
+    end
+
+    %% External Services
+    OpenAI[🤖 OpenAI<br/>GPT-4 Vision API]
+    GoogleCloud[☁️ Google Cloud]
+    GoogleMaps[🗺️ Google Maps]
+
+    %% Google Cloud Services
+    subgraph GoogleCloud
+        GCS[Cloud Storage<br/>Image Storage]
+        GCPAuth[Service Account<br/>Authentication]
+    end
+
+    %% Google Maps Services
+    subgraph GoogleMaps
+        Geocoding[Geocoding API<br/>GPS → Address]
+        Places[Places API<br/>Restaurant Info]
+    end
+
+    %% User Interactions
+    User -->|1. Upload Photo<br/>or Text| Backend
+    User -->|2. View Meals| Backend
+    User -->|3. Get Statistics| Backend
+    User -->|4. Login/Register| Backend
+
+    %% Backend to Database
+    Backend -->|Store/Retrieve<br/>Meal Data| Database
+    Backend -->|Cache Data| Cache
+
+    %% Backend to External Services
+    Backend -->|Upload Images| GCS
+    Backend -->|AI Analysis<br/>25+ nutrition fields| OpenAI
+    Backend -->|Extract GPS<br/>→ Location| Geocoding
+    Backend -->|Get Restaurant<br/>Details| Places
+
+    %% Response Flow
+    Backend -->|5. Nutrition Analysis<br/>+ Location Context| User
+
+    %% Styling
+    classDef userStyle fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    classDef systemStyle fill:#50C878,stroke:#2E7D4E,color:#fff
+    classDef externalStyle fill:#FF9500,stroke:#CC7700,color:#fff
+    classDef dataStyle fill:#9B59B6,stroke:#6C3483,color:#fff
+
+    class User userStyle
+    class Backend systemStyle
+    class OpenAI,GCS,GCPAuth,Geocoding,Places externalStyle
+    class Database,Cache dataStyle
+```
+
+# System Context Diagram
+
+## Purpose
+Shows NutriLens system boundaries, external actors, and key dependencies. This is the highest-level view for understanding what the system does and how it integrates with external services.
+
+## Key Components
+
+### Internal Systems
+- **Spring Boot Backend**: REST API handling all business logic
+- **PostgreSQL**: Primary data store for meals, users, corrections
+- **Redis**: Caching layer for performance optimization
+
+### External Dependencies
+- **OpenAI GPT-4 Vision**: AI analysis extracting 25+ nutrition fields from photos
+- **Google Cloud Storage (GCS)**: Persistent image storage
+- **Google Maps Geocoding**: GPS coordinates → Human-readable addresses
+- **Google Maps Places**: Restaurant identification and details
+
+### Users
+- Mobile app users (Flutter: iOS/Android)
+- Web app users (React)
+
+## Data Flows
+
+1. **Upload Photo/Text** → Backend receives meal data
+2. **AI Analysis** → OpenAI extracts nutrition information
+3. **Image Storage** → GCS stores photos permanently
+4. **Location Intelligence** → Google Maps identifies restaurants
+5. **Response** → User receives nutrition + location context
+
+## Key Interactions
+
+| Source | Destination | Purpose | Protocol |
+|--------|-------------|---------|----------|
+| User | Backend | Upload meals, view history | HTTPS/REST |
+| Backend | OpenAI | AI vision analysis | HTTPS/REST |
+| Backend | GCS | Image upload/retrieval | gRPC/HTTP |
+| Backend | Google Maps | Location resolution | HTTPS/REST |
+| Backend | PostgreSQL | Data persistence | JDBC |
+| Backend | Redis | Caching | Redis Protocol |
+
+## External API Costs
+
+- **OpenAI**: ~$0.02 per meal (2000 tokens avg)
+- **Google Maps**: ~$0.01 per meal with GPS
+- **Google Cloud Storage**: ~$0.026/GB/month
+- **Total**: ~$0.03 per meal analyzed
+
+## Security Boundaries
+
+- **Authentication**: JWT tokens for all API requests
+- **Authorization**: User-scoped data access
+- **API Keys**: Secured via environment variables
+- **Network**: HTTPS for all external communication
+- **Data**: Encrypted at rest (PostgreSQL + GCS)
+
+## Scalability Considerations
+
+- **Backend**: Horizontally scalable (stateless)
+- **Database**: Vertical scaling with read replicas
+- **Cache**: Redis cluster for high availability
+- **Storage**: GCS auto-scales
+- **External APIs**: Rate-limited (handled by backend)
+
+## Notes
+
+- System follows "compound interest" principle: gets better as AI models improve
+- All context (GPS, time, photos) captured now for future AI enhancements
+- Zero additional user input required beyond photo upload
+- Graceful degradation when GPS unavailable

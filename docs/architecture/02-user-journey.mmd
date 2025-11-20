@@ -1,0 +1,249 @@
+```mermaid
+sequenceDiagram
+    participant U as 👤 User
+    participant App as 📱 Flutter/React App
+    participant API as 🔧 Backend API
+    participant Auth as 🔐 Auth Service
+    participant Meal as 🍽️ Meal Service
+    participant AI as 🤖 AI Analyzer
+    participant Storage as ☁️ Cloud Storage
+    participant DB as 💾 PostgreSQL
+
+    Note over U,DB: Journey 1: Photo Upload with Location
+
+    U->>App: 1. Take photo of meal
+    App->>App: 2. Extract EXIF (GPS, timestamp)
+    App->>API: 3. POST /api/meals (photo + JWT)
+    API->>Auth: 4. Validate JWT token
+    Auth-->>API: ✓ User authenticated
+
+    API->>Storage: 5. Upload image to GCS
+    Storage-->>API: Image URL
+
+    par Parallel Processing
+        API->>AI: 6a. Extract metadata (GPS)
+        AI-->>API: Location context
+    and
+        API->>AI: 6b. Analyze image + context
+        AI-->>API: 25+ nutrition fields
+    end
+
+    API->>Meal: 7. Create meal entity
+    Meal->>DB: 8. Save meal + nutrition + location
+    DB-->>Meal: Meal ID
+
+    API-->>App: 9. Response: Meal with nutrition + location
+    App->>U: 10. Display: "🍽️ Chipotle, 850 cal, 45g protein..."
+
+    Note over U,DB: Journey 2: Text-Only Meal Entry
+
+    U->>App: 1. Type "2 scrambled eggs"
+    App->>API: 2. POST /api/meals (text only + JWT)
+    API->>Auth: 3. Validate JWT
+    Auth-->>API: ✓ Authenticated
+
+    API->>AI: 4. Analyze text description
+    AI-->>API: Estimated nutrition
+
+    API->>Meal: 5. Create meal (no photo)
+    Meal->>DB: 6. Save meal
+    DB-->>Meal: Meal ID
+
+    API-->>App: 7. Response: Estimated nutrition
+    App->>U: 8. Display: "~180 cal, 12g protein (estimated)"
+
+    Note over U,DB: Journey 3: View Meal History
+
+    U->>App: 1. Open meal history (date range)
+    App->>API: 2. GET /api/meals?startDate=...&endDate=...
+    API->>Auth: 3. Validate JWT
+    Auth-->>API: ✓ Authenticated
+
+    API->>Meal: 4. Query meals for user + date range
+    Meal->>DB: 5. SELECT meals WHERE...
+    DB-->>Meal: Meal list (paginated)
+
+    API-->>App: 6. Response: Meals with nutrition + locations
+    App->>U: 7. Display: Calendar/list view with badges
+
+    Note over U,DB: Journey 4: Weekly Statistics
+
+    U->>App: 1. View analytics dashboard
+    App->>API: 2. GET /api/statistics/weekly
+    API->>Auth: 3. Validate JWT
+    Auth-->>API: ✓ Authenticated
+
+    API->>Meal: 4. Aggregate statistics (avg, totals)
+    Meal->>DB: 5. Query aggregations
+    DB-->>Meal: Stats: avg calories, macros, plant diversity
+
+    API-->>App: 6. Response: Weekly aggregations
+    App->>U: 7. Display: Charts, trends, insights
+
+    Note over U,DB: Journey 5: AI Correction (User Edits Nutrition)
+
+    U->>App: 1. Edit meal: Change calories 850→900
+    App->>API: 2. PUT /api/meals/{id}/correct
+    API->>Auth: 3. Validate JWT
+    Auth-->>API: ✓ Authenticated
+
+    API->>Meal: 4. Log AI correction
+    Meal->>DB: 5. INSERT ai_correction_log
+    Meal->>DB: 6. UPDATE meal calories
+    DB-->>Meal: Updated
+
+    API-->>App: 7. Response: Meal updated
+    App->>U: 8. Display: "✓ Meal updated"
+    Note right of DB: Telemetry captured<br/>for AI improvement
+```
+
+# User Journey Diagram
+
+## Purpose
+Shows end-to-end user interactions with NutriLens across the most common use cases. This helps understand the user experience and system behavior.
+
+## Key Journeys
+
+### Journey 1: Photo Upload with Location (Most Common)
+**Steps:** 10 steps from photo capture to display
+**Duration:** ~3-5 seconds
+**Key Features:**
+- Automatic GPS extraction from EXIF
+- Parallel processing (metadata + AI analysis)
+- Location context displayed with meal
+
+**Success Criteria:**
+- Photo uploaded to cloud storage
+- 25+ nutrition fields extracted
+- Restaurant identified (if applicable)
+- Location badge displayed ("🍽️ Chipotle" or "🏠 Home")
+
+### Journey 2: Text-Only Meal Entry
+**Steps:** 8 steps from text input to display
+**Duration:** ~2-3 seconds
+**Key Features:**
+- No photo required
+- AI estimates from description
+- Faster than photo upload
+
+**Use Cases:**
+- "black coffee" (simple items)
+- "2 scrambled eggs with toast"
+- Quick logging without camera
+
+### Journey 3: View Meal History
+**Steps:** 7 steps from request to display
+**Duration:** <1 second (cached)
+**Key Features:**
+- Paginated results
+- Date range filtering
+- Location badges visible
+
+**Display Formats:**
+- Calendar view (by date)
+- List view (chronological)
+- Search/filter by location
+
+### Journey 4: Weekly Statistics
+**Steps:** 7 steps from request to visualization
+**Duration:** ~1-2 seconds
+**Key Features:**
+- Aggregated nutrition data
+- Trends over time
+- Plant diversity tracking
+- Restaurant vs home breakdown
+
+**Metrics Shown:**
+- Average daily calories
+- Macro distribution
+- NOVA score trends
+- Plant species count
+- Location-based insights
+
+### Journey 5: AI Correction
+**Steps:** 8 steps from edit to confirmation
+**Duration:** <1 second
+**Key Features:**
+- User can correct AI estimates
+- Corrections logged for telemetry
+- Improves AI over time
+
+**Telemetry Captured:**
+- Original AI value
+- User-corrected value
+- Field name (calories, protein, etc.)
+- Meal context (location, time)
+
+## Parallel Processing
+
+**Journey 1 (Photo Upload)** uses parallel processing:
+- **6a**: Metadata extraction (GPS → Location context)
+- **6b**: AI vision analysis (Photo → Nutrition fields)
+
+These run simultaneously to minimize latency.
+
+## Authentication Flow
+
+All journeys require JWT authentication:
+1. User logs in once → Receives JWT token
+2. Token included in all API requests
+3. Backend validates token before processing
+4. Token expires after configurable period (default: 7 days)
+
+## Error Handling
+
+| Journey | Error Scenario | Fallback |
+|---------|---------------|----------|
+| Photo Upload | GPS missing | No location badge, still analyze photo |
+| Photo Upload | OpenAI timeout | Retry 3x, then return partial data |
+| Text Entry | Invalid description | Prompt user for clarification |
+| History | No meals found | Display empty state with CTA |
+| Statistics | Insufficient data | Show "Need more data" message |
+| Correction | Invalid value | Validation error, request correction |
+
+## Performance Targets
+
+| Journey | Target | Actual |
+|---------|--------|--------|
+| Photo Upload | <5s | ~3-4s |
+| Text Entry | <3s | ~2s |
+| History | <1s | ~200-500ms (cached) |
+| Statistics | <2s | ~1-1.5s |
+| Correction | <1s | ~200ms |
+
+## Data Privacy
+
+**GPS Data:**
+- Stored in database (currently)
+- Planned: User opt-out option
+- Planned: Auto-delete after N days
+- Alternative: Store only "restaurant/home" flag
+
+**Photos:**
+- Stored in Google Cloud Storage (private buckets)
+- Access controlled via signed URLs
+- Retention: Indefinite (user can delete)
+
+## Mobile-Specific Considerations
+
+**Camera Access:**
+- Request permission on first use
+- Fallback to gallery if denied
+- Option to type description instead
+
+**EXIF Data:**
+- Extracted on device before upload
+- GPS coordinates sent with photo
+- Timestamp used for meal timing context
+
+**Offline Support:**
+- Planned: Queue uploads when offline
+- Sync when connection restored
+
+## Notes
+
+- Journeys designed for minimal user input
+- Average upload time: 3-4 seconds
+- User sees progress indicators during AI analysis
+- Location context improves accuracy by 20-30%
+- All journeys support both mobile and web clients

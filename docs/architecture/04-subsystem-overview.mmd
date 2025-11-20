@@ -1,0 +1,348 @@
+```mermaid
+graph TB
+    %% Client Layer
+    subgraph Clients["👥 Client Applications"]
+        Mobile[📱 Flutter Mobile<br/>iOS/Android]
+        Web[🌐 React Web]
+    end
+
+    %% API Gateway Layer
+    subgraph APILayer["🚪 API Gateway Layer"]
+        Controllers[REST Controllers<br/>MealController, AuthController, etc.]
+        Security[Security Layer<br/>JWT + Rate Limiting]
+        Validation[Input Validation<br/>Request DTOs]
+    end
+
+    %% Core Domain Layer
+    subgraph DomainLayer["🎯 Core Domain Layer"]
+        Auth[🔐 Auth Subsystem<br/>Login, Register, JWT]
+        Meal[🍽️ Meal Subsystem<br/>CRUD, Aggregations]
+        Analyzer[🤖 AI Analyzer Subsystem<br/>Vision, Metadata, Location]
+        Correction[📊 Correction Tracking<br/>Telemetry, Validation]
+        Stats[📈 Statistics Subsystem<br/>Aggregations, Analytics]
+        Ingredient[🥗 Ingredient Subsystem<br/>Learning, Suggestions]
+    end
+
+    %% Infrastructure Layer
+    subgraph InfraLayer["⚙️ Infrastructure Layer"]
+        Storage[☁️ Storage Service<br/>Google Cloud Storage]
+        Cache[⚡ Cache Service<br/>Redis]
+        Monitoring[🔍 Monitoring<br/>Health Checks, Metrics]
+    end
+
+    %% Data Layer
+    subgraph DataLayer["💾 Data Persistence"]
+        UserRepo[(User Repository<br/>JPA)]
+        MealRepo[(Meal Repository<br/>JPA)]
+        CorrectionRepo[(Correction Repository<br/>JPA)]
+        IngredientRepo[(Ingredient Repository<br/>JPA)]
+        DB[(PostgreSQL<br/>Primary Database)]
+    end
+
+    %% External Services
+    subgraph ExternalServices["🌍 External Services"]
+        OpenAI[🤖 OpenAI<br/>GPT-4 Vision]
+        GoogleMaps[🗺️ Google Maps<br/>Geocoding + Places]
+        GCS[☁️ GCS<br/>Image Storage]
+    end
+
+    %% Client to API Gateway
+    Mobile --> Controllers
+    Web --> Controllers
+
+    %% API Gateway to Security
+    Controllers --> Security
+    Security --> Validation
+
+    %% API Gateway to Domain
+    Validation --> Auth
+    Validation --> Meal
+    Validation --> Stats
+    Validation --> Correction
+
+    %% Domain Interactions
+    Meal --> Analyzer
+    Analyzer --> Correction
+    Meal --> Stats
+    Analyzer --> Storage
+
+    %% Auth to Data
+    Auth --> UserRepo
+
+    %% Meal to Data
+    Meal --> MealRepo
+    Meal --> Cache
+
+    %% Correction to Data
+    Correction --> CorrectionRepo
+
+    %% Ingredient to Data
+    Ingredient --> IngredientRepo
+
+    %% Repositories to Database
+    UserRepo --> DB
+    MealRepo --> DB
+    CorrectionRepo --> DB
+    IngredientRepo --> DB
+
+    %% Analyzer to External Services
+    Analyzer --> OpenAI
+    Analyzer --> GoogleMaps
+    Storage --> GCS
+
+    %% Monitoring
+    Monitoring -.->|Health Checks| DB
+    Monitoring -.->|Health Checks| Cache
+    Monitoring -.->|Health Checks| OpenAI
+    Monitoring -.->|Health Checks| GoogleMaps
+    Monitoring -.->|Health Checks| GCS
+
+    %% Styling
+    classDef clientStyle fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    classDef apiStyle fill:#E8491D,stroke:#A63317,color:#fff
+    classDef domainStyle fill:#50C878,stroke:#2E7D4E,color:#fff
+    classDef infraStyle fill:#9B59B6,stroke:#6C3483,color:#fff
+    classDef dataStyle fill:#34495E,stroke:#1C2833,color:#fff
+    classDef externalStyle fill:#FF9500,stroke:#CC7700,color:#fff
+
+    class Mobile,Web clientStyle
+    class Controllers,Security,Validation apiStyle
+    class Auth,Meal,Analyzer,Correction,Stats,Ingredient domainStyle
+    class Storage,Cache,Monitoring infraStyle
+    class UserRepo,MealRepo,CorrectionRepo,IngredientRepo,DB dataStyle
+    class OpenAI,GoogleMaps,GCS externalStyle
+```
+
+# Subsystem Overview Diagram
+
+## Purpose
+Shows all major subsystems in NutriLens and their interactions. This provides a mid-level architectural view for understanding component responsibilities and dependencies.
+
+## Layers
+
+### 1. Client Applications Layer (Blue)
+**Responsibility:** User interface and user experience
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Flutter Mobile | Dart/Flutter | iOS and Android native apps |
+| React Web | React/TypeScript | Web application |
+
+**Key Features:**
+- Photo capture with EXIF extraction
+- JWT token management
+- Offline support (planned)
+- Material Design 3 UI
+
+---
+
+### 2. API Gateway Layer (Red)
+**Responsibility:** Request routing, security, and validation
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| REST Controllers | Spring MVC | HTTP request handlers |
+| Security Layer | Spring Security + JWT | Authentication & authorization |
+| Input Validation | Jakarta Validation | Request DTO validation |
+
+**Key Features:**
+- JWT-based authentication
+- Rate limiting (100 req/min per user)
+- CORS configuration
+- OpenAPI/Swagger documentation
+
+**Controllers:**
+- `AuthController` - Login, register, token refresh
+- `MealController` - Meal CRUD operations
+- `StatisticsController` - Analytics endpoints
+- `IngredientController` - Ingredient management
+- `UserProfileController` - User settings
+
+---
+
+### 3. Core Domain Layer (Green)
+**Responsibility:** Business logic and domain rules
+
+#### Auth Subsystem
+**Purpose:** User authentication and authorization
+- User registration and login
+- JWT token generation and validation
+- Password hashing (BCrypt)
+- Custom UserDetailsService
+
+#### Meal Subsystem
+**Purpose:** Core business logic for meal management
+- Meal CRUD operations
+- Meal aggregations (daily, weekly, monthly)
+- Calorie calculations
+- Meal type detection
+- Search and filtering
+
+#### AI Analyzer Subsystem
+**Purpose:** AI-powered nutrition analysis
+- **OpenAIVisionService**: GPT-4 Vision integration
+- **PhotoMetadataService**: EXIF extraction (GPS, timestamp)
+- **LocationContextService**: Google Maps integration
+- **ImageProcessingService**: Image validation and preprocessing
+
+#### Correction Tracking Subsystem
+**Purpose:** AI quality improvement through telemetry
+- Track user corrections to AI estimates
+- Validation service for corrections
+- Correction history and analytics
+- Quality metrics aggregation
+
+#### Statistics Subsystem
+**Purpose:** Analytics and insights
+- Daily/weekly/monthly aggregations
+- Macro distribution calculations
+- Plant diversity tracking
+- Restaurant vs home analysis
+- NOVA score trends
+
+#### Ingredient Subsystem
+**Purpose:** Ingredient learning and suggestions
+- Ingredient extraction from meals
+- Frequency tracking
+- Suggestion engine (planned)
+- User preferences (planned)
+
+---
+
+### 4. Infrastructure Layer (Purple)
+**Responsibility:** Technical infrastructure and cross-cutting concerns
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Storage Service | Google Cloud Storage | Image persistence |
+| Cache Service | Redis | Performance optimization |
+| Monitoring | Spring Actuator | Health checks and metrics |
+
+**Key Features:**
+- Health indicators for all external services
+- Metrics collection (requests, latency, errors)
+- Logging with structured output
+- Graceful degradation
+
+---
+
+### 5. Data Persistence Layer (Dark Gray)
+**Responsibility:** Data access and persistence
+
+| Component | Pattern | Purpose |
+|-----------|---------|---------|
+| User Repository | Repository Pattern | User data access |
+| Meal Repository | Repository Pattern | Meal data access |
+| Correction Repository | Repository Pattern | Correction tracking |
+| Ingredient Repository | Repository Pattern | Ingredient data |
+| PostgreSQL | Relational DB | Primary data store |
+
+**Key Features:**
+- JPA/Hibernate ORM
+- Flyway migrations for schema versioning
+- Connection pooling (HikariCP)
+- Indexes for performance
+- Transaction management
+
+---
+
+### 6. External Services (Orange)
+**Responsibility:** Third-party integrations
+
+| Service | Purpose | Cost/Call |
+|---------|---------|-----------|
+| OpenAI GPT-4 Vision | Nutrition analysis | ~$0.02 |
+| Google Maps Geocoding | GPS → Address | ~$0.005 |
+| Google Maps Places | Restaurant info | ~$0.005 |
+| Google Cloud Storage | Image storage | ~$0.026/GB/month |
+
+---
+
+## Subsystem Interactions
+
+### Meal Upload Flow
+```
+Controllers → Security → Validation → Meal → Analyzer → Storage/OpenAI/GoogleMaps
+                                    ↓                              ↓
+                                MealRepo → DB                Correction → CorrectionRepo
+```
+
+### Statistics Query Flow
+```
+Controllers → Security → Stats → MealRepo → DB
+                          ↓
+                        Cache (if available)
+```
+
+### AI Correction Flow
+```
+Controllers → Security → Meal → Correction → CorrectionRepo → DB
+                                      ↓
+                                Validation Service
+```
+
+## Design Patterns Used
+
+| Pattern | Usage | Example |
+|---------|-------|---------|
+| **Repository Pattern** | Data access abstraction | `MealRepository`, `UserRepository` |
+| **Service Layer** | Business logic separation | `MealService`, `AuthService` |
+| **DTO Pattern** | API contracts | `MealResponse`, `AnalysisRequest` |
+| **Strategy Pattern** | Analyzer implementations | `OpenAIVisionService` |
+| **Dependency Injection** | Loose coupling | Spring IoC container |
+| **Builder Pattern** | Complex object creation | Entity builders in tests |
+| **Template Method** | Common workflows | Base service classes |
+
+## Cross-Cutting Concerns
+
+### Error Handling
+- `GlobalExceptionHandler` intercepts all exceptions
+- Custom exception hierarchy
+- Standardized error responses (`ApiError` DTO)
+
+### Security
+- JWT filter on all protected endpoints
+- Role-based access control (planned)
+- Rate limiting per user
+- CORS configured for frontend domains
+
+### Observability
+- Health checks for all dependencies
+- Prometheus metrics (planned)
+- Structured logging
+- Request tracing (correlation IDs)
+
+### Performance
+- Redis caching for frequently accessed data
+- Database query optimization with indexes
+- Connection pooling
+- Async processing for heavy operations (planned)
+
+## Communication Patterns
+
+| Pattern | Usage |
+|---------|-------|
+| **Synchronous REST** | All client-server communication |
+| **Event-Driven** | Planned for async AI analysis |
+| **Request-Response** | Standard API pattern |
+| **Repository Pattern** | Data access |
+
+## Scalability
+
+### Horizontal Scaling
+- **API Layer**: Stateless, can add more instances
+- **Domain Layer**: Stateless services
+- **Cache**: Redis cluster for HA
+
+### Vertical Scaling
+- **Database**: Read replicas for queries
+- **Connection Pools**: Tuned for load
+
+## Notes
+
+- Clean separation between layers
+- Domain layer has no dependency on API layer
+- Infrastructure concerns isolated
+- External service integration through adapters
+- All subsystems independently testable
+- Mutation testing ensures strong test quality (70% coverage)
