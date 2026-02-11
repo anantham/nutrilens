@@ -31,19 +31,42 @@ public class OpenAIVisionService {
     public OpenAIVisionService(
             RestTemplate restTemplate,
             @Value("${openai.api.key}") String apiKey,
-            @Value("${openai.api.url:https://api.openai.com/v1/chat/completions}") String apiUrl,
+            @Value("${openai.api.url:https://api.openai.com/v1}") String apiUrl,
             @Value("${openai.api.model:gpt-4o-mini}") String model,
             @Value("${openai.api.max-tokens:800}") int maxTokens) {
 
         this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
-        this.apiUrl = apiUrl;
-        this.apiKey = apiKey;
+        this.apiUrl = normalizeApiUrl(apiUrl);
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model;
         this.maxTokens = maxTokens;
 
         log.info("Vision Service initialized - URL: {}, Model: {}, Max Tokens: {}",
-                apiUrl, model, maxTokens);
+                this.apiUrl, model, maxTokens);
+    }
+
+    private String normalizeApiUrl(String configuredUrl) {
+        String url = configuredUrl == null ? "" : configuredUrl.trim();
+        if (url.isEmpty()) {
+            return "https://api.openai.com/v1/chat/completions";
+        }
+        if (url.endsWith("/chat/completions")) {
+            return url;
+        }
+        if (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+        if (url.endsWith("/v1")) {
+            return url + "/chat/completions";
+        }
+        return url + "/chat/completions";
+    }
+
+    private void applyAuthHeader(HttpHeaders headers) {
+        if (apiKey != null && !apiKey.isBlank()) {
+            headers.setBearerAuth(apiKey);
+        }
     }
 
     /**
@@ -93,7 +116,7 @@ public class OpenAIVisionService {
             // Set up headers
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
+            applyAuthHeader(headers);
 
             // Create HTTP entity
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
@@ -320,7 +343,7 @@ public class OpenAIVisionService {
             // Set up headers
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
+            applyAuthHeader(headers);
 
             // Create HTTP entity
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);

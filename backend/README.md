@@ -4,13 +4,13 @@ Spring Boot REST API for the Nutritheous meal tracking app.
 
 ## Overview
 
-This is the backend that powers Nutritheous. It handles user authentication, stores meal data, manages image uploads to Google Cloud Storage, and talks to OpenAI's Vision API for nutrition analysis.
+This is the backend that powers Nutritheous. It handles user authentication, stores meal data, manages image uploads to Google Cloud Storage, and talks to an OpenAI-compatible Vision API for nutrition analysis (LM Studio, OpenAI, or OpenRouter).
 
 Stack:
 - Spring Boot 3.2 (Java 17)
 - PostgreSQL 15
 - Google Cloud Storage
-- OpenAI GPT-4 Vision
+- OpenAI-compatible Vision endpoint (LM Studio/OpenAI/OpenRouter)
 
 ## Getting Started
 
@@ -19,7 +19,7 @@ Stack:
 - Java 17 or newer
 - PostgreSQL 15+
 - Google Cloud Platform account (for storage)
-- OpenAI API key
+- OpenAI-compatible endpoint (API key optional for local LM Studio)
 
 ### Setup
 
@@ -64,10 +64,12 @@ You can provide GCS credentials two ways:
 1. As JSON string in `GCS_CREDENTIALS_JSON` (recommended)
 2. As file path in `GCS_CREDENTIALS_PATH` (for local dev)
 
-**OpenAI:**
+**Vision backend (OpenAI-compatible):**
 ```env
-OPENAI_API_KEY=sk-proj-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_API_KEY=lm-studio
+OPENAI_BASE_URL=http://100.81.65.74:1234/v1
+OPENAI_API_MODEL=qwen/qwen3-vl-8b
+OPENAI_API_MAX_TOKENS=800
 ```
 
 **JWT:**
@@ -84,7 +86,7 @@ backend/
 │   ├── auth/              # Users, login, JWT
 │   ├── meal/              # Meal CRUD and service
 │   ├── storage/           # Google Cloud Storage
-│   ├── analyzer/          # OpenAI Vision integration
+│   ├── analyzer/          # OpenAI-compatible Vision integration
 │   ├── image/             # Image compression
 │   ├── statistics/        # Analytics endpoints
 │   ├── config/            # Spring config, security
@@ -227,8 +229,8 @@ When running locally:
 3. If image provided:
    - Compresses image (max 300KB)
    - Uploads to Google Cloud Storage
-4. Sends image URL + description to OpenAI Vision
-5. OpenAI returns nutrition data as JSON
+4. Sends image URL + description to the configured OpenAI-compatible Vision API
+5. The model returns nutrition data as JSON
 6. Saves meal + nutrition to PostgreSQL
 7. Returns meal data to app
 
@@ -245,7 +247,7 @@ Signed URLs are generated on-demand with 24-hour expiry.
 
 ### AI Analysis
 
-The `OpenAIVisionService` sends the meal image to GPT-4 Vision with a prompt asking for:
+The `OpenAIVisionService` sends the meal image to the configured model with a prompt asking for:
 - Calories
 - Macros (protein, carbs, fat)
 - Fiber, sugar, sodium, etc.
